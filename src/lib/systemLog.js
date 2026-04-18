@@ -4,6 +4,10 @@ let lastCleanupAt = 0;
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 15;
 
+export function __resetLogCleanupForTests() {
+  lastCleanupAt = 0;
+}
+
 function normalizeContext(context) {
   if (!context) {
     return null;
