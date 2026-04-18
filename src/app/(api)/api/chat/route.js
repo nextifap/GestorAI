@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import { saveSystemLog } from '@/lib/systemLog';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY?.trim(),
@@ -43,7 +44,6 @@ export async function POST(req) {
   let conversationId, userMessage;
   try {
     const body = await req.json();
-    console.log("DEBUG body recebido:", body);
 
     // Aceita ambos campos: message ou userMessage
     conversationId = body.conversationId;
@@ -140,7 +140,12 @@ Responda sempre de forma prestativa, concisa e focada na produtividade.`;
     return NextResponse.json({ response: assistantResponse }, { status: 200 });
 
   } catch (error) {
-    console.error('ERRO CRÍTICO na rota de chat (Erro 500):', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/chat',
+      message: 'Erro interno na rota de chat.',
+      context: { error, conversationId, userId },
+    });
     return NextResponse.json({ message: 'Erro interno no servidor.' }, { status: 500 });
   }
 }

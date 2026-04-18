@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../../lib/prisma';
+import { saveSystemLog } from '@/lib/systemLog';
 
 // Middleware para verificar a autenticação (pode ser a mesma função reutilizada)
 function verificarToken(request) {
@@ -45,7 +46,12 @@ export async function GET(request, { params }) {
     return NextResponse.json({ conversation: conversationWithMessages }, { status: 200 });
 
   } catch (error) {
-    console.error('Erro ao buscar mensagens da conversa:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/chat/[conversationId]',
+      message: 'Erro ao buscar mensagens da conversa.',
+      context: { error, conversationId, userId },
+    });
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

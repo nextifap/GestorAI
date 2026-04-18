@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma'; // Importe a instância do Prisma Client
+import { saveSystemLog } from '@/lib/systemLog';
 
 // Função para verificar o token JWT e obter as informações do usuário
 function verificarToken(request) {
@@ -48,7 +49,12 @@ export async function POST(request) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('Erro ao criar tarefa:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/token',
+      message: 'Erro ao criar tarefa.',
+      context: { error, userId: verificacao?.usuario?.id },
+    });
     return NextResponse.json({
       error: 'Erro interno do servidor ao criar a tarefa.'
     }, { status: 500 });

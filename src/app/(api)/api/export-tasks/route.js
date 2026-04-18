@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
 import { stringify } from 'csv-stringify';
+import { saveSystemLog } from '@/lib/systemLog';
 
 // Middleware para verificar a autenticação
 function verificarToken(request) {
@@ -60,7 +61,12 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error('Erro ao exportar tarefas:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/export-tasks',
+      message: 'Erro ao exportar tarefas.',
+      context: { error, userId },
+    });
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

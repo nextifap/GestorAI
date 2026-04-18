@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
+import { saveSystemLog } from '@/lib/systemLog';
 
 function verificarToken(request) {
   const token = request.headers.get('authorization')?.split(' ')[1];
@@ -32,6 +33,12 @@ export async function GET(request) {
     });
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/conversations',
+      message: 'Erro ao buscar histórico de conversas.',
+      context: { error, userId },
+    });
     return NextResponse.json({ error: 'Erro ao buscar histórico.' }, { status: 500 });
   }
 }
@@ -55,6 +62,12 @@ export async function POST(request) {
     });
     return NextResponse.json({ conversation: newConversation }, { status: 201 });
   } catch (error) {
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/conversations',
+      message: 'Erro ao salvar conversa.',
+      context: { error, userId },
+    });
     return NextResponse.json({ error: 'Erro ao salvar conversa.' }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
+import { saveSystemLog } from '@/lib/systemLog';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const INTERNAL_USER_EMAIL = 'webhook@gestoai.com';
@@ -22,9 +23,6 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  // ADICIONANDO LOG PARA VERIFICAR SE O ARQUIVO ESTÁ RECARREGADO
-  console.log("--- WEBHOOK INICIADO (VERSÃO DEBUG) ---"); 
-
   try {
     const body = await request.json();
 
@@ -39,7 +37,12 @@ export async function POST(request) {
       null;
 
     if (!incomingMessage || !chatId) {
-      console.error('Mensagem ou chatId ausente no payload.');
+      await saveSystemLog({
+        level: 'WARN',
+        source: 'api/telegram-webhook',
+        message: 'Mensagem ou chatId ausente no payload.',
+        context: { body },
+      });
       return NextResponse.json({ error: 'Mensagem ou chatId ausente' }, { status: 400 });
     }
 
@@ -57,7 +60,6 @@ export async function POST(request) {
           nomeCompleto: `Usuário Telegram ${chatId}`
         },
       });
-      console.log(`Usuário Telegram criado: ${user.id}`);
     }
 
     // 2. Busca ou cria a última conversa ativa para o usuário
@@ -73,20 +75,15 @@ export async function POST(request) {
           userId: user.id,
         },
       });
-      console.log(`Nova conversa criada: ${conversation.id}`);
     }
 
     // 3. OBTÉM o token interno
     const internalToken = getInternalToken();
 
-    // ==============================================================
-    // LOG DE DEBUG DO PAYLOAD
     const payloadToSend = {
         message: incomingMessage,
         conversationId: conversation.id
     };
-    console.log("DEBUG PAYLOAD ENVIADO PARA /api/chat:", payloadToSend);
-    // ==============================================================
     
     // 4. CHAMA a API interna /api/chat (proxy)
     const chatResponse = await fetch(new URL('/api/chat', request.url), {
@@ -100,7 +97,12 @@ export async function POST(request) {
 
     if (!chatResponse.ok) {
       const errorText = await chatResponse.text();
-      console.error('Erro na API interna de chat:', errorText);
+      await saveSystemLog({
+        level: 'ERROR',
+        source: 'api/telegram-webhook',
+        message: 'Erro na API interna de chat.',
+        context: { errorText, chatId, conversationId: conversation.id },
+      });
 
       // Envia notificação de erro para o Telegram
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -128,14 +130,24 @@ export async function POST(request) {
     });
 
     if (!telegramResponse.ok) {
-      console.error('Erro ao enviar mensagem para Telegram:', await telegramResponse.text());
+      await saveSystemLog({
+        level: 'ERROR',
+        source: 'api/telegram-webhook',
+        message: 'Erro ao enviar mensagem para Telegram.',
+        context: { telegramError: await telegramResponse.text(), chatId },
+      });
       return NextResponse.json({ error: 'Falha ao enviar mensagem para Telegram' }, { status: 500 });
     }
 
     return NextResponse.json({ chatId, response: assistantResponse }, { status: 200 });
 
   } catch (error) {
-    console.error('Erro no webhook do Telegram:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/telegram-webhook',
+      message: 'Erro no webhook do Telegram.',
+      context: { error },
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

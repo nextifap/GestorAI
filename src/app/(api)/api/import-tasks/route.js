@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
 import { parse } from 'csv-parse';
+import { saveSystemLog } from '@/lib/systemLog';
 
 // Middleware para verificar a autenticação
 function verificarToken(request) {
@@ -57,7 +58,12 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Planilha importada com sucesso!' }, { status: 200 });
 
   } catch (error) {
-    console.error('Erro ao importar planilha:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/import-tasks',
+      message: 'Erro ao importar planilha.',
+      context: { error, userId },
+    });
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

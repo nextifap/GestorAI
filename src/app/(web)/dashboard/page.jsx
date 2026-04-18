@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import jwt from 'jsonwebtoken';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const capitalizeName = (name) => {
   if (!name) return '';
@@ -66,7 +69,7 @@ export default function DashboardPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        setConversations(data.conversations);
+        setConversations(data.conversations || []);
       }
     } catch (error) {
       console.error('Erro ao buscar conversas:', error);
@@ -84,16 +87,17 @@ export default function DashboardPage() {
     
     let convIdToUse = currentConversationId;
     
-    // Salva o resumo da primeira mensagem
     if (!convIdToUse) {
       const summary = getSummary(currentMessage);
       const newConv = await saveConversationSummary(token, summary);
-      convIdToUse = newConv.conversation.id;
-      setCurrentConversationId(newConv.conversation.id);
+      if (newConv) {
+        convIdToUse = newConv.conversation.id;
+        setCurrentConversationId(newConv.conversation.id);
+      }
     }
 
     const newUserMessage = { sender: 'user', text: currentMessage, conversationId: convIdToUse };
-    setChatHistory(prevHistory => [...prevHistory, newUserMessage]);
+    setChatHistory(prev => [...prev, newUserMessage]);
     setCurrentMessage('');
 
     try {
@@ -106,16 +110,13 @@ export default function DashboardPage() {
         body: JSON.stringify({ message: newUserMessage.text, conversationId: convIdToUse }),
       });
 
-      if (!response.ok) throw new Error('Erro na comunicação com o assistente.');
+      if (!response.ok) throw new Error('Erro na comunicação.');
       
       const result = await response.json();
-      const assistantResponse = result.response;
-      
-      setChatHistory(prevHistory => [...prevHistory, { sender: 'assistant', text: assistantResponse, conversationId: convIdToUse }]);
+      setChatHistory(prev => [...prev, { sender: 'assistant', text: result.response, conversationId: convIdToUse }]);
 
     } catch (error) {
-      console.error('Erro no chat:', error);
-      alert('Erro ao enviar mensagem: ' + error.message);
+      alert('Erro: ' + error.message);
     }
   };
 
@@ -123,17 +124,14 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/conversations', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ summary }),
       });
       const data = await response.json();
       fetchConversations(token); 
       return data;
     } catch (error) {
-      console.error('Erro ao salvar resumo da conversa:', error);
+      console.error(error);
     }
   };
 
@@ -143,177 +141,141 @@ export default function DashboardPage() {
     setCurrentConversationId(null);
   };
   
-  const handleHistoryClick = async (conversationId) => {
+  const handleHistoryClick = async (id) => {
     const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
     try {
-        const response = await fetch(`/api/chat/${conversationId}`, {
+        const response = await fetch(`/api/chat/${id}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` },
         });
-
-        if (!response.ok) throw new Error('Erro ao carregar a conversa.');
-
         const result = await response.json();
-        const messages = result.conversation.messages.map(msg => ({
-            sender: msg.sender,
-            text: msg.text,
-        }));
-
-        setChatHistory(messages);
-        setCurrentConversationId(conversationId);
+        const msgs = result.conversation.messages.map(m => ({ sender: m.sender, text: m.text }));
+        setChatHistory(msgs);
+        setCurrentConversationId(id);
     } catch (error) {
-        console.error('Erro ao carregar o histórico:', error);
-        alert('Erro ao carregar a conversa: ' + error.message);
+        console.error(error);
     }
   };
 
-  const handleImport = async (event) => {
-    const file = event.target.files[0];
+  const handleImport = async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
     const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
     const formData = new FormData();
     formData.append('file', file);
-    try {
-      const response = await fetch('/api/import-tasks', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData,
-      });
-      if (!response.ok) throw new Error('Erro ao enviar a planilha.');
-      alert('Planilha importada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao importar planilha:', error);
-      alert('Erro ao importar planilha: ' + error.message);
-    }
+    await fetch('/api/import-tasks', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    alert('Importado!');
   };
 
   const handleExport = async () => {
     const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
-    try {
-      const response = await fetch('/api/export-tasks', {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Erro ao baixar a planilha.');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'tarefas_exportadas.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      alert('Planilha exportada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao exportar planilha:', error);
-      alert('Erro ao exportar planilha: ' + error.message);
-    }
+    const response = await fetch('/api/export-tasks', {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'export.csv';
+    a.click();
   };
 
-  if (loading) {
-    return (<div className="flex items-center justify-center min-h-screen bg-black-basic text-cream">Carregando...</div>);
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-black-basic text-cream">Carregando...</div>;
 
   return (
-    <div className="flex min-h-screen bg-background text-black-basic font-sans">
-      <aside className="w-80 bg-primary p-6 flex flex-col justify-between shadow-lg">
-        <div>
-          <div className="mt-8">
-            <button
-              onClick={handleNewChat}
-              className="w-full bg-accent text-cream p-3 rounded-full font-semibold hover:bg-white hover:text-primary transition-colors duration-200 mb-6"
-            >
-              Novo Chat
-            </button>
-            <h3 className="font-semibold mb-4 text-cream">HISTÓRICO</h3>
-            <div className="space-y-2">
-              {conversations.map((conv, index) => (
-                <div 
-                  key={index} 
-                  onClick={() => handleHistoryClick(conv.id)}
-                  className="cursor-pointer p-2 rounded-lg text-cream hover:bg-accent hover:text-white transition duration-200">
-                  {conv.summary}
-                </div>
-              ))}
-            </div>
+    <div className="flex h-screen bg-background text-black-basic font-sans overflow-hidden">
+      <aside className="w-80 bg-primary p-6 flex flex-col h-full z-20">
+        <div className="mt-8 flex flex-col h-full overflow-hidden">
+          <button onClick={handleNewChat} className="w-full bg-accent text-cream p-3 rounded-full font-semibold hover:bg-white hover:text-primary transition-all mb-6">Novo Chat</button>
+          <h3 className="text-cream text-xs uppercase font-bold mb-4 opacity-70">Histórico</h3>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {conversations.map((conv) => (
+              <div key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`cursor-pointer p-3 rounded-xl text-sm text-cream truncate transition ${currentConversationId === conv.id ? 'bg-accent' : 'hover:bg-accent/40'}`}>
+                {conv.summary}
+              </div>
+            ))}
           </div>
         </div>
       </aside>
-      <main className="flex-1 flex flex-col p-8 text-center bg-cream relative">
-        <header className="absolute top-0 right-0 p-6">
-          <button onClick={handleLogout} className="bg-primary text-cream p-3 rounded-full font-semibold hover:bg-accent transition-colors duration-300 shadow-md">
-            <img src="/out.svg" alt="" />
+
+      <main className="flex-1 flex flex-col h-full bg-cream relative">
+        <header className="absolute top-0 right-0 p-6 z-30">
+          <button onClick={handleLogout} className="bg-primary text-cream p-3 rounded-full hover:bg-accent transition-all shadow-lg">
+            <img src="/out.svg" alt="Sair" className="w-5 h-5" />
           </button>
         </header>
 
-        <div className="flex-1 flex flex-col items-center justify-between w-full max-w-4xl mx-auto p-4">
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-10 bg-black-basic rounded-lg shadow-md w-full mb-8">
-            
+        <div className="flex-1 flex flex-col w-full max-w-5xl mx-auto p-4 h-full">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-black-basic rounded-t-3xl shadow-2xl mt-4 custom-scrollbar">
             {chatHistory.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none z-0">
-                <Image 
-                  src="/logo.png" 
-                  alt="GestoAI Logo" 
-                  width={400} 
-                  height={400} 
-                  priority
-                />
-                <h1 className="text-3xl font-bold mb-4 text-cream">
-                  Olá, {user?.nomeCompleto ? capitalizeName(user.nomeCompleto) : 'Usuário'}!
-                </h1>
+              <div className="flex-1 h-full flex flex-col items-center justify-center opacity-10">
+                <Image src="/logo.png" alt="Logo" width={200} height={200} priority />
+                <h1 className="text-2xl font-bold text-cream mt-4">Olá, {user?.nomeCompleto ? capitalizeName(user.nomeCompleto) : 'Usuário'}!</h1>
               </div>
             )}
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-10">
-              {chatHistory.map((msg, index) => (
-                <div 
-                  key={index} 
-                  className={`p-3 rounded-lg max-w-[90%] ${msg.sender === 'user' ? 'bg-primary text-cream self-end ml-auto' : 'text-cream self-start'}`}
-                >
-                  {msg.text}
+            {chatHistory.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`p-4 rounded-2xl max-w-[85%] ${msg.sender === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-[#1e1e1e] text-cream rounded-tl-none border border-gray-800'}`}>
+                  {msg.sender === 'assistant' ? (
+                    <div className="prose prose-invert max-w-none text-sm [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4 [&>strong]:text-accent">
+                      <ReactMarkdown
+                        components={{
+                          code({ inline, className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || '');
+                            return !inline && match ? (
+                              <div className="my-4 rounded-xl overflow-hidden border border-gray-700">
+                                <div className="bg-gray-800 px-4 py-1 text-[10px] text-gray-400 uppercase font-bold">{match[1]}</div>
+                                <SyntaxHighlighter style={atomDark} language={match[1]} PreTag="div" customStyle={{ margin: 0, padding: '1rem', background: '#121212' }} {...props}>
+                                  {String(children).replace(/\n$/, '')}
+                                </SyntaxHighlighter>
+                              </div>
+                            ) : (
+                              <code className="bg-gray-700 px-1 rounded text-accent" {...props}>{children}</code>
+                            );
+                          }
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    </div>
+                  ) : <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
                 </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
           </div>
-          
-          {/* Campo de input e botões de ação */}
-          <div className="flex flex-col gap-4 w-full relative z-10">
-            <div className="flex w-full">
-              <input
-                type="text"
-                value={currentMessage}
-                onChange={(e) => setCurrentMessage(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') handleSendMessage();
-                }}
-                className="flex-1 p-3 rounded-2xl border border-gray-300 bg-cream text-black-basic"
-                placeholder="Descreva aqui o que você precisa para que eu possa ajudá-lo"
-              />
-              <button
-                onClick={handleSendMessage}
-                className="p-3 bg-primary text-cream rounded-r-lg hover:bg-accent transition-colors duration-200"
-              >
-                Enviar
-              </button>
+
+          <div className="bg-black-basic p-6 rounded-b-3xl mb-4 border-t border-gray-800">
+            <div className="flex gap-3 mb-6">
+              <input type="text" value={currentMessage} onChange={(e) => setCurrentMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} className="flex-1 p-4 rounded-2xl bg-[#2a2a2a] text-cream outline-none focus:ring-1 focus:ring-accent" placeholder="Descreva aqui o que precisa..." />
+              <button onClick={handleSendMessage} className="px-8 bg-primary text-cream rounded-2xl font-bold hover:bg-accent transition-all active:scale-95">Enviar</button>
             </div>
-            
-            <div className="flex justify-center space-x-4">
-              <input type="file" id="file-input-import" className="hidden" onChange={handleImport} accept=".csv" />
-              <div onClick={() => document.getElementById('file-input-import').click()} className="flex flex-col items-center p-4 bg-primary rounded-xl cursor-pointer hover:bg-accent transition duration-200">
-                <Image src="/export.svg" alt="Importar" width={32} height={32} />
-                <span className="mt-2 text-sm text-cream">Importar</span>
-              </div>
-              <div onClick={handleExport} className="flex flex-col items-center p-4 bg-primary rounded-xl cursor-pointer hover:bg-accent transition duration-200">
-                <Image src="/import.svg" alt="Exportar" width={32} height={32} />
-                <span className="mt-2 text-sm text-cream">Exportar</span>
-              </div>
+            <div className="flex justify-center space-x-10">
+              <button onClick={() => document.getElementById('file-input').click()} className="flex flex-col items-center gap-1 group">
+                <div className="p-3 bg-gray-800 rounded-xl group-hover:bg-primary transition-all"><Image src="/export.svg" alt="In" width={20} height={20}/></div>
+                <span className="text-[10px] text-gray-500 font-bold uppercase">Importar</span>
+                <input type="file" id="file-input" className="hidden" onChange={handleImport} accept=".csv" />
+              </button>
+              <button onClick={handleExport} className="flex flex-col items-center gap-1 group">
+                <div className="p-3 bg-gray-800 rounded-xl group-hover:bg-primary transition-all"><Image src="/import.svg" alt="Out" width={20} height={20}/></div>
+                <span className="text-[10px] text-gray-500 font-bold uppercase">Exportar</span>
+              </button>
             </div>
           </div>
         </div>
       </main>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .prose pre { background: transparent !important; padding: 0 !important; }
+        .prose code::before, .prose code::after { content: "" !important; }
+      `}</style>
     </div>
   );
 }
