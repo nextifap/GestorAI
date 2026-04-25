@@ -3,6 +3,18 @@ import prisma from '@/lib/prisma';
 let lastCleanupAt = 0;
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 15;
+const REDACTED_KEYS = new Set([
+  'authorization',
+  'cookie',
+  'token',
+  'password',
+  'senha',
+  'stack',
+  'body',
+  'errortext',
+  'telegramerror',
+  'rawpayload',
+]);
 
 export function __resetLogCleanupForTests() {
   lastCleanupAt = 0;
@@ -14,14 +26,22 @@ function normalizeContext(context) {
   }
 
   try {
-    return JSON.parse(JSON.stringify(context, (_key, value) => {
+    return JSON.parse(JSON.stringify(context, (key, value) => {
+      if (REDACTED_KEYS.has(String(key).toLowerCase())) {
+        return '[REDACTED]';
+      }
+
       if (value instanceof Error) {
         return {
           name: value.name,
           message: value.message,
-          stack: value.stack,
         };
       }
+
+      if (typeof value === 'string' && value.length > 500) {
+        return `${value.slice(0, 500)}...[TRUNCATED]`;
+      }
+
       return value;
     }));
   } catch {
