@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import jwt from 'jsonwebtoken';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -26,6 +25,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
   const [conversations, setConversations] = useState([]);
+  const [handoverQueue, setHandoverQueue] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const router = useRouter();
@@ -33,23 +33,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const tokenCookie = document.cookie.split(';').find(row => row.trim().startsWith('token='));
-      if (!tokenCookie) {
-        router.push('/login');
-      } else {
-        const token = tokenCookie.split('=')[1];
-        try {
-          const decodedUser = jwt.decode(token);
-          if (decodedUser) {
-            setUser(decodedUser);
-            await fetchConversations(token);
-            setLoading(false);
-          } else {
-            router.push('/login');
-          }
-        } catch (error) {
+      try {
+        const meResponse = await fetch('/api/auth/me', { method: 'GET' });
+        if (!meResponse.ok) {
           router.push('/login');
+          return;
         }
+
+        const meData = await meResponse.json();
+        if (!meData?.user) {
+          router.push('/login');
+          return;
+        }
+
+        setUser(meData.user);
+        await fetchConversations();
+        await fetchHandoverQueue();
+        setLoading(false);
+      } catch {
+        router.push('/login');
       }
     };
     checkAuth();
@@ -61,35 +63,80 @@ export default function DashboardPage() {
     }
   }, [chatHistory]);
 
-  const fetchConversations = async (token) => {
+  const fetchConversations = async () => {
     try {
       const response = await fetch('/api/conversations', {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
         setConversations(data.conversations || []);
+      } else if (response.status === 401) {
+        router.push('/login');
       }
-    } catch (error) {
-      console.error('Erro ao buscar conversas:', error);
+    } catch {
+      // Erros de rede são tratados com fallback de UX no fluxo da tela.
     }
   };
 
-  const handleLogout = () => {
-    document.cookie = 'token=; Max-Age=0; path=/;';
+  const fetchHandoverQueue = async () => {
+    try {
+      const response = await fetch('/api/handover/queue', {
+        method: 'GET',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHandoverQueue(data.queue || []);
+      } else if (response.status === 401) {
+        router.push('/login');
+      }
+    } catch {
+      // Sem ação: mantém a última fila carregada.
+    }
+  };
+
+  const handleTakeHandover = async (conversationId) => {
+    try {
+      const response = await fetch(`/api/handover/${conversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'handover_in_progress',
+          handoverNote: 'Conversa assumida manualmente pelo painel web.',
+        }),
+      });
+
+      if (response.status === 401) {
+        router.push('/login');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Não foi possível assumir a conversa.');
+      }
+
+      await fetchHandoverQueue();
+      await fetchConversations();
+      await handleHistoryClick(conversationId);
+    } catch (error) {
+      alert(error.message || 'Erro ao assumir conversa.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   };
 
   const handleSendMessage = async () => {
     if (!currentMessage.trim()) return;
-    const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
-    
+
     let convIdToUse = currentConversationId;
     
     if (!convIdToUse) {
       const summary = getSummary(currentMessage);
-      const newConv = await saveConversationSummary(token, summary);
+      const newConv = await saveConversationSummary(summary);
       if (newConv) {
         convIdToUse = newConv.conversation.id;
         setCurrentConversationId(newConv.conversation.id);
@@ -105,7 +152,6 @@ export default function DashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ message: newUserMessage.text, conversationId: convIdToUse }),
       });
@@ -120,18 +166,24 @@ export default function DashboardPage() {
     }
   };
 
-  const saveConversationSummary = async (token, summary) => {
+  const saveConversationSummary = async (summary) => {
     try {
       const response = await fetch('/api/conversations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ summary }),
       });
+
+      if (response.status === 401) {
+        router.push('/login');
+        return null;
+      }
+
       const data = await response.json();
-      fetchConversations(token); 
+      fetchConversations(); 
       return data;
-    } catch (error) {
-      console.error(error);
+    } catch {
+      return null;
     }
   };
 
@@ -142,41 +194,53 @@ export default function DashboardPage() {
   };
   
   const handleHistoryClick = async (id) => {
-    const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
     try {
         const response = await fetch(`/api/chat/${id}`, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` },
         });
+
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
+
         const result = await response.json();
         const msgs = result.conversation.messages.map(m => ({ sender: m.sender, text: m.text }));
         setChatHistory(msgs);
         setCurrentConversationId(id);
-    } catch (error) {
-        console.error(error);
+    } catch {
+        // Sem ação: mantém a tela atual.
     }
   };
 
   const handleImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
     const formData = new FormData();
     formData.append('file', file);
-    await fetch('/api/import-tasks', {
+    const response = await fetch('/api/import-tasks', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
     alert('Importado!');
   };
 
   const handleExport = async () => {
-    const token = document.cookie.split(';').find(row => row.trim().startsWith('token='))?.split('=')[1];
     const response = await fetch('/api/export-tasks', {
       method: 'GET',
-      headers: { 'Authorization': `Bearer ${token}` },
     });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -192,11 +256,32 @@ export default function DashboardPage() {
       <aside className="w-80 bg-primary p-6 flex flex-col h-full z-20">
         <div className="mt-8 flex flex-col h-full overflow-hidden">
           <button onClick={handleNewChat} className="w-full bg-accent text-cream p-3 rounded-full font-semibold hover:bg-white hover:text-primary transition-all mb-6">Novo Chat</button>
+
+          <h3 className="text-cream text-xs uppercase font-bold mb-2 opacity-70">Handover</h3>
+          <div className="max-h-40 overflow-y-auto space-y-2 pr-2 custom-scrollbar mb-6">
+            {handoverQueue.length === 0 && (
+              <div className="text-[11px] text-cream/70">Sem conversas pendentes.</div>
+            )}
+            {handoverQueue.map((conv) => (
+              <div key={`handover-${conv.id}`} className="p-2 rounded-xl bg-black/20">
+                <p className="text-[11px] text-cream truncate">{conv.summary}</p>
+                <p className="text-[10px] text-cream/70 mt-1">Atendimento: {conv.handlingMode || 'Manual'}</p>
+                <button
+                  onClick={() => handleTakeHandover(conv.id)}
+                  className="mt-1 w-full text-[11px] bg-accent text-cream rounded-lg py-1 font-semibold hover:bg-white hover:text-primary transition-all"
+                >
+                  Assumir
+                </button>
+              </div>
+            ))}
+          </div>
+
           <h3 className="text-cream text-xs uppercase font-bold mb-4 opacity-70">Histórico</h3>
           <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
             {conversations.map((conv) => (
               <div key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`cursor-pointer p-3 rounded-xl text-sm text-cream truncate transition ${currentConversationId === conv.id ? 'bg-accent' : 'hover:bg-accent/40'}`}>
-                {conv.summary}
+                <div className="truncate">{conv.summary}</div>
+                <div className="text-[10px] opacity-70 uppercase mt-1">{conv.handlingMode || 'Automatizado'}</div>
               </div>
             ))}
           </div>
