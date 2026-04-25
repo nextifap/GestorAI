@@ -12,6 +12,12 @@ const redirectMock = vi.fn((url) => {
 });
 
 const nextMock = vi.fn(() => ({ type: 'next' }));
+const jsonMock = vi.fn((body, init) => ({
+  type: 'json',
+  body,
+  status: init?.status,
+  cookies: { set: vi.fn() },
+}));
 
 vi.mock('jose', () => ({
   jwtVerify: (...args) => jwtVerifyMock(...args),
@@ -21,6 +27,7 @@ vi.mock('next/server', () => ({
   NextResponse: {
     redirect: (...args) => redirectMock(...args),
     next: (...args) => nextMock(...args),
+    json: (...args) => jsonMock(...args),
   },
 }));
 
@@ -69,6 +76,21 @@ describe('middleware routing stability', () => {
 
   it('allows unauthenticated access to public routes', async () => {
     const response = await middleware(buildRequest({ pathname: '/cadastro' }));
+
+    expect(nextMock).toHaveBeenCalledOnce();
+    expect(response).toEqual({ type: 'next' });
+  });
+
+  it('returns 401 json for unauthenticated private api route', async () => {
+    const response = await middleware(buildRequest({ pathname: '/api/conversations' }));
+
+    expect(jsonMock).toHaveBeenCalledWith({ error: 'Não autorizado.' }, { status: 401 });
+    expect(response.type).toBe('json');
+    expect(response.status).toBe(401);
+  });
+
+  it('allows unauthenticated access to public api route', async () => {
+    const response = await middleware(buildRequest({ pathname: '/api/auth/login' }));
 
     expect(nextMock).toHaveBeenCalledOnce();
     expect(response).toEqual({ type: 'next' });

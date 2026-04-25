@@ -30,7 +30,17 @@ export async function POST(request) {
       },
     });
 
-    return NextResponse.json({ message: 'Usuário cadastrado com sucesso!', user: novoUsuario }, { status: 201 });
+    return NextResponse.json(
+      {
+        message: 'Usuário cadastrado com sucesso!',
+        user: {
+          id: novoUsuario.id,
+          email: novoUsuario.email,
+          nomeCompleto: novoUsuario.nomeCompleto,
+        },
+      },
+      { status: 201 },
+    );
 
   } catch (error) {
     await saveSystemLog({

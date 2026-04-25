@@ -1,23 +1,11 @@
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '../../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
-
-// Middleware para verificar a autenticação (pode ser a mesma função reutilizada)
-function verificarToken(request) {
-  const token = request.headers.get('authorization')?.split(' ')[1];
-  if (!token) return { error: 'Token não fornecido.', status: 401 };
-  try {
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
+import { verifyRequestToken } from '@/lib/auth';
 
 // Rota GET para buscar todas as mensagens de uma conversa
 export async function GET(request, { params }) {
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }

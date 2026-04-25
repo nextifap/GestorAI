@@ -2,25 +2,12 @@
 import prisma from '@/lib/prisma';
 import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { saveSystemLog } from '@/lib/systemLog';
+import { verifyRequestToken } from '@/lib/auth';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY?.trim(),
 });
-
-// Função para verificar JWT
-function verificarToken(request) {
-  const token = request.headers.get('authorization')?.split(' ')[1];
-  if (!token) return { error: 'Token não fornecido.', status: 401 };
-
-  try {
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
 
 // Rota GET para evitar erro 405
 export async function GET() {
@@ -33,7 +20,7 @@ export async function GET() {
 // Rota POST
 export async function POST(req) {
   // Verifica JWT
-  const verificacao = verificarToken(req);
+  const verificacao = verifyRequestToken(req);
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
@@ -64,6 +51,21 @@ export async function POST(req) {
   }
 
   try {
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!conversation) {
+      return NextResponse.json({ message: 'Conversa não encontrada para este usuário.' }, { status: 404 });
+    }
+
     // Salva mensagem do usuário
     await prisma.chatMessage.create({
       data: {
@@ -72,6 +74,16 @@ export async function POST(req) {
         sender: 'user',
       },
     });
+
+    if (conversation.status === 'handover_pending' || conversation.status === 'handover_in_progress') {
+      return NextResponse.json(
+        {
+          response: 'Seu atendimento está em revisão manual pelo coordenador. Retornaremos em breve.',
+          handover: true,
+        },
+        { status: 200 },
+      );
+    }
 
     // Limita o contexto para as últimas 10 mensagens (Performance)
     const messages = await prisma.chatMessage.findMany({

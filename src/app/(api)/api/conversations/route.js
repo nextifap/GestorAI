@@ -1,24 +1,13 @@
 // app/api/conversations/route.js
 
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
-
-function verificarToken(request) {
-  const token = request.headers.get('authorization')?.split(' ')[1];
-  if (!token) return { error: 'Token não fornecido.', status: 401 };
-  try {
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
+import { verifyRequestToken } from '@/lib/auth';
 
 // Rota GET para buscar o histórico de conversas
 export async function GET(request) {
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
@@ -45,7 +34,7 @@ export async function GET(request) {
 
 // Rota POST para salvar um novo resumo de conversa
 export async function POST(request) {
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
