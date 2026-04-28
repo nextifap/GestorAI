@@ -32,7 +32,7 @@ export default function DashboardPage() {
     const checkAuth = async () => {
       const tokenCookie = document.cookie.split(';').find(row => row.trim().startsWith('token='));
       if (!tokenCookie) {
-        router.push('/auth/login');
+        router.push('/login');
       } else {
         const token = tokenCookie.split('=')[1];
         try {
@@ -42,10 +42,10 @@ export default function DashboardPage() {
             await fetchConversations(token);
             setLoading(false);
           } else {
-            router.push('/auth/login');
+            router.push('/login');
           }
         } catch (error) {
-          router.push('/auth/login');
+          router.push('/login');
         }
       }
     };
@@ -75,7 +75,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     document.cookie = 'token=; Max-Age=0; path=/;';
-    router.push('/auth/login');
+    router.push('/login');
   };
 
   const handleSendMessage = async () => {
