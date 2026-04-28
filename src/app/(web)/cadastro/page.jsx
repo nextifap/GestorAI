@@ -20,12 +20,11 @@ export default function CadastroPage() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const router = useRouter();
-  const [registeringStatus, setRegisteringStatus] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
-    
+
     if (!nomeCompleto || !email || !senha || !repitaSenha) {
       setMessage('Preencha todos os campos.');
       setMessageType('error');
@@ -41,9 +40,6 @@ export default function CadastroPage() {
     const nomeFormatado = capitalizeName(nomeCompleto);
 
     try {
-
-      setRegisteringStatus(true);
-
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,8 +61,6 @@ export default function CadastroPage() {
       setMessage(error.message);
       setMessageType('error');
     }
-
-    setRegisteringStatus(false);
   };
 
   return (
@@ -91,10 +85,10 @@ export default function CadastroPage() {
           />
         </div>
 
-      {/* Lado Direito - Formulário */}
+        {/* Lado Direito - Formulário */}
         <div className="flex flex-col justify-center sm:w-1/2 px-6">
           <h2 className="text-3xl font-bold text-gray-800 text-center mb-6">GestorAI</h2>
-          {!registeringStatus && (
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
               type="text"
@@ -138,17 +132,6 @@ export default function CadastroPage() {
               </p>
             )}
           </form>
-          )}
-
-          {registeringStatus && (
-            <div className="flex items-center justify-center mt-4">
-              <svg className="animate-spin h-8 w-8 text-azulContraste" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-              </svg>
-              <span className="ml-2 text-gray-600">Cadastrando...</span>
-            </div>
-          )}
         </div>
       </div>
     </div>
