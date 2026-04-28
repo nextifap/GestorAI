@@ -9,6 +9,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
+  const [logginStatus, setLogginStatus] = useState('');
+
   const router = useRouter();
 
   const handleSubmit = async (e) => {
@@ -22,6 +24,8 @@ export default function LoginPage() {
     }
 
     try {
+      setLogginStatus(true)
+      
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,6 +45,8 @@ export default function LoginPage() {
       setMessage(error.message);
       setMessageType('error');
     }
+
+    setLogginStatus(false)
   };
 
   return (
@@ -53,44 +59,56 @@ export default function LoginPage() {
             GestorAI
           </h1>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <input
-                type="email"
-                placeholder="Digite seu E-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 rounded-2xl border border-pretoBase focus:outline-none focus:ring-2 focus:ring-azulPrincial text-black placeholder-gray-500"
-              />
-            </div>
+          {!logginStatus && (
+            <form onSubmit={handleSubmit} className="space-y-5" v-if="!logginStatus">
+              <div>
+                <input
+                  type="email"
+                  placeholder="Digite seu E-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 rounded-2xl border border-pretoBase focus:outline-none focus:ring-2 focus:ring-azulPrincial text-black placeholder-gray-500"
+                />
+              </div>
 
-            <div>
-              <input
-                type="password"
-                placeholder="Digite sua Senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 rounded-2xl border border-pretoBase focus:outline-none focus:ring-2 focus:ring-azulPrincial text-black placeholder-gray-500"
-              />
-            </div>
+              <div>
+                <input
+                  type="password"
+                  placeholder="Digite sua Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3 rounded-2xl border border-pretoBase focus:outline-none focus:ring-2 focus:ring-azulPrincial text-black placeholder-gray-500"
+                />
+              </div>
 
-            <button
-              type="submit"
-              className="w-full bg-azulContraste text-white p-3 rounded-full font-semibold "
-            >
-              Entrar
-            </button>
-
-            {message && (
-              <p
-                className={`text-center font-medium mt-2 ${
-                  messageType === 'success' ? 'text-green-600' : 'text-red-600'
-                }`}
+              <button
+                type="submit"
+                className="w-full bg-azulContraste text-white p-3 rounded-full font-semibold "
               >
-                {message}
-              </p>
-            )}
-          </form>
+                Entrar
+              </button>
+
+              {message && (
+                <p
+                  className={`text-center font-medium mt-2 ${
+                    messageType === 'success' ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
+                  {message}
+                </p>
+              )}
+            </form>
+          )}
+
+           {logginStatus && (
+            <div className="flex items-center justify-center mt-4">
+              <svg className="animate-spin h-8 w-8 text-azulContraste" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span className="ml-2 text-gray-600">Fazendo Login...</span>
+            </div>
+           )}
         </div>
 
         {/* Divisor vertical */}
