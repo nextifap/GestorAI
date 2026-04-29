@@ -4,6 +4,7 @@ import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import { getAcademicContextForPrompt } from '@/lib/academicContext';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY?.trim(),
@@ -113,8 +114,29 @@ export async function POST(req) {
       timeZone: 'America/Sao_Paulo', // Usa a propriedade correta para o identificador
     });
 
+    let academicContextBlock = '';
+    try {
+      const contextResult = await getAcademicContextForPrompt({
+        prismaClient: prisma,
+        groqClient: groq,
+        userMessage,
+      });
+      academicContextBlock = contextResult.contextBlock;
+    } catch (contextError) {
+      await saveSystemLog({
+        level: 'WARN',
+        source: 'api/chat',
+        message: 'Falha ao recuperar contexto acadêmico vetorial.',
+        context: { contextError, conversationId, userId },
+      });
+    }
+
+    const academicInstructions = academicContextBlock
+      ? `\n\nContexto acadêmico recuperado da base curricular da Unifapce (ADS e SI):\n${academicContextBlock}\n\nUse esse contexto como fonte prioritária quando for pertinente à pergunta. Se houver incerteza, deixe isso explícito e evite inventar informações.`
+      : '';
+
     // 2. Cria o conteúdo do System Prompt, incluindo a data/hora
-    const systemPromptContent = `Você é o GestorAI, um assistente virtual de produtividade. Sua função principal é ajudar o usuário a organizar tarefas e responder dúvidas.
+    const systemPromptContent = `Você é o GestorAI, um assistente virtual acadêmico da Unifapce para ADS e SI. Sua função principal é responder dúvidas acadêmicas, orientar o aluno e também ajudar na organização de tarefas.
 
 Atenção: A data e hora atual do sistema é: ${dataHoraAtual}. Utilize essa informação como sua referência temporal e responda com base nela.
 
@@ -122,7 +144,7 @@ Se o usuário pedir para 'criar uma tarefa', você DEVE pedir os detalhes COMPLE
 
 Exemplo de resposta ao pedido de tarefa: 'Com certeza! Para eu criar a tarefa, qual o título, o dia e a hora que você precisa que seja feito?'
 
-Responda sempre de forma prestativa, concisa e focada na produtividade.`;
+Responda sempre de forma prestativa, concisa e focada no contexto acadêmico e na produtividade.${academicInstructions}`;
 
 
     // Adiciona instrução do sistema
