@@ -739,11 +739,11 @@ export default function DashboardWorkspace() {
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-wide">{String(hour).padStart(2, '0')}:00</div>
                       <div className="mt-1 text-xs leading-5">{cellStatus}</div>
-                  {requests.length > 0 && <div className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800">{requests.length} {requests.length === 1 ? 'solicitação' : 'solicitações'}</div>}
+                      {requests.length > 0 && <div className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800">{requests.length} {requests.length === 1 ? 'solicitação' : 'solicitações'}</div>}
+                    </div>
                     <div className={`h-2.5 w-2.5 rounded-full ${slot ? (slot.isAvailable ? 'bg-emerald-500' : 'bg-rose-500') : (blockedReason ? 'bg-slate-300' : 'bg-slate-300 group-hover:bg-sky-400')}`} />
                   </div>
                   <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-current/60">{slot ? 'Slot cadastrado' : blockedReason ? 'Agenda fechada' : 'Clique para criar'}</div>
-                  {requests.length > 0 && <div className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800">{requests.length} solicitação(ões)</div>}
                 </button>
               );
             })}
