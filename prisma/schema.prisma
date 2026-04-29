@@ -17,6 +17,7 @@ model User {
   email           String         @unique
   senha           String
   nomeCompleto    String
+  telegramId      String?        @unique @map("telegram_id")
 
   tasks           Task[]
   conversations   Conversation[]
@@ -36,9 +37,19 @@ model Conversation {
   id            String        @id @default(uuid())
   summary       String
   createdAt     DateTime      @default(now())
+  status        String        @default("active")
+  channel       String        @default("web")
+  handlingMode  String        @default("Automatizado")
+  handoverAt    DateTime?
+  handoverNote  String?
+  triageScore   Float?
+  triageReason  String?
   userId        String
   user          User          @relation(fields: [userId], references: [id])
   messages      ChatMessage[]
+
+  @@index([status, createdAt])
+  @@index([channel, createdAt])
 }
 
 model ChatMessage {
@@ -48,4 +59,16 @@ model ChatMessage {
   createdAt      DateTime     @default(now())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  source    String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level])
 }

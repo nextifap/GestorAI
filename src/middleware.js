@@ -4,39 +4,55 @@ import { jwtVerify } from 'jose';
 
 // Rotas que não precisam de autenticação (públicas)
 const rotasPublicas = ['/', '/cadastro', '/login'];
+const rotasPublicasApi = ['/api/auth/login', '/api/auth/register', '/api/telegram-webhook'];
+
+function isRotaPublica(pathname) {
+  return rotasPublicas.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));
+}
+
+function isRotaApiPublica(pathname) {
+  return rotasPublicasApi.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));
+}
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
+  const isApiRoute = pathname.startsWith('/api/');
   const token = req.cookies.get('token')?.value;
 
-  console.log(`Middleware ativado para a rota: ${pathname}`);
-
-  // 1. Se o usuário já estiver logado e tentar acessar rota pública, redireciona para dashboard
-  if (token && rotasPublicas.includes(pathname)) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
-  }
-
-  // 2. Se usuário não estiver logado e tentar acessar rota privada, redireciona para login
-  if (!token && !rotasPublicas.includes(pathname)) {
-    return NextResponse.redirect(new URL('/login', req.url));
-  }
-
-  // 3. Se houver token, verificar validade
+  let tokenValido = false;
   if (token) {
     try {
       await jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET));
-      return NextResponse.next();
-    } catch (err) {
-      console.log('Token inválido ou expirado:', err);
-      return NextResponse.redirect(new URL('/login', req.url));
+      tokenValido = true;
+    } catch {
+      tokenValido = false;
     }
   }
 
-  // 4. Se rota pública sem token, apenas deixa passar
+  if (!isApiRoute && tokenValido && isRotaPublica(pathname)) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
+  }
+
+  if (!tokenValido && isApiRoute && !isRotaApiPublica(pathname)) {
+    const response = NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    if (token) {
+      response.cookies.set('token', '', { maxAge: 0, path: '/' });
+    }
+    return response;
+  }
+
+  if (!tokenValido && !isApiRoute && !isRotaPublica(pathname)) {
+    const response = NextResponse.redirect(new URL('/login', req.url));
+    if (token) {
+      response.cookies.set('token', '', { maxAge: 0, path: '/' });
+    }
+    return response;
+  }
+
   return NextResponse.next();
 }
 
-// Matcher que ignora arquivos estáticos e API
+// Matcher que ignora apenas arquivos estáticos
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|logo.png|vercel.svg|window.svg).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|vercel.svg|window.svg).*)'],
 };

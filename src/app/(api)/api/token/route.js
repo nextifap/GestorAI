@@ -1,31 +1,13 @@
 // app/api/tasks/route.js
 
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma'; // Importe a instância do Prisma Client
-
-// Função para verificar o token JWT e obter as informações do usuário
-function verificarToken(request) {
-  // Acessa o token do cabeçalho de autorização da requisição
-  const token = request.headers.get('authorization')?.split(' ')[1];
-
-  if (!token) {
-    return { error: 'Token não fornecido.', status: 401 };
-  }
-
-  try {
-    // Tenta verificar e decodificar o token usando a chave secreta
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    // Se o token for inválido, retorna um erro
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
+import { saveSystemLog } from '@/lib/systemLog';
+import { verifyRequestToken } from '@/lib/auth';
 
 export async function POST(request) {
   // 1. Verifique o token antes de processar a requisição
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
@@ -48,7 +30,12 @@ export async function POST(request) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('Erro ao criar tarefa:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/tasks',
+      message: 'Erro ao criar tarefa.',
+      context: { error, userId: verificacao?.usuario?.id },
+    });
     return NextResponse.json({
       error: 'Erro interno do servidor ao criar a tarefa.'
     }, { status: 500 });

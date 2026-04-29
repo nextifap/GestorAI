@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '../../../../../lib/prisma'; // Importe a instância do Prisma Client
+import { saveSystemLog } from '@/lib/systemLog';
 
 export async function POST(request) {
   const { nomeCompleto, email, senha, repitaSenha } = await request.json();
@@ -29,10 +30,25 @@ export async function POST(request) {
       },
     });
 
-    return NextResponse.json({ message: 'Usuário cadastrado com sucesso!', user: novoUsuario }, { status: 201 });
+    return NextResponse.json(
+      {
+        message: 'Usuário cadastrado com sucesso!',
+        user: {
+          id: novoUsuario.id,
+          email: novoUsuario.email,
+          nomeCompleto: novoUsuario.nomeCompleto,
+        },
+      },
+      { status: 201 },
+    );
 
   } catch (error) {
-    console.error('Erro ao cadastrar usuário:', error);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/auth/register',
+      message: 'Erro ao cadastrar usuário.',
+      context: { error },
+    });
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

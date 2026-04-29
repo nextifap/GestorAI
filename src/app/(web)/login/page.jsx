@@ -36,8 +36,6 @@ export default function LoginPage() {
 
       if (!response.ok) throw new Error(result.error || 'Erro ao fazer login');
 
-      document.cookie = `token=${result.token}; path=/; max-age=${60 * 60}; SameSite=Lax`;
-
       setMessage('Login realizado com sucesso!');
       setMessageType('success');
 
