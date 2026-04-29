@@ -15,6 +15,7 @@
     "bcryptjs": "^3.0.2",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
+    "date-holidays": "^3.27.0",
     "dotenv": "^17.2.2",
     "groq-sdk": "^0.32.0",
     "jose": "^6.1.0",

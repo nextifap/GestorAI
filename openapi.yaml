@@ -1,0 +1,171 @@
+openapi: 3.0.3
+info:
+  title: GestorAI - Scheduling API
+  version: 1.0.0
+  description: OpenAPI specification (Swagger) for appointment requests endpoints used by the GestorAI application.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+paths:
+  /api/appointments/requests:
+    get:
+      summary: List appointment requests for authenticated manager
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Optional status filter (e.g., pending, approved, rejected)
+      responses:
+        '200':
+          description: List of appointment requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppointmentRequest'
+    post:
+      summary: Create a new appointment request (by a non-manager user)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentRequestCreate'
+            examples:
+              example-1:
+                value:
+                  managerId: "manager-uuid-123"
+                  date: "2026-04-29"
+                  hour: 14
+                  channel: "web"
+                  justification: "Teste via Postman"
+      responses:
+        '201':
+          description: Created — returns minimal created request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      status:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AppointmentRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        date:
+          type: string
+          format: date
+        hour:
+          type: integer
+        channel:
+          type: string
+        justification:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        requester:
+          type: object
+          properties:
+            id:
+              type: string
+            nomeCompleto:
+              type: string
+            email:
+              type: string
+    AppointmentRequestCreate:
+      type: object
+      required:
+        - managerId
+        - date
+        - hour
+      properties:
+        managerId:
+          type: string
+          description: UUID do gestor
+        date:
+          type: string
+          format: date
+          description: Data no formato YYYY-MM-DD (somente data)
+        hour:
+          type: integer
+          description: Hora (0-23)
+        channel:
+          type: string
+          description: Canal de solicitação (web, telegram, etc.)
+        justification:
+          type: string
+          description: Texto opcional justificando a solicitação
+  responses:
+    BadRequest:
+      description: Bad request — invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden — requester not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not found — manager or requester missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict — duplicate, blocked date, or occupied slot
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message

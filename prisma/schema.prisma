@@ -21,6 +21,9 @@ model User {
 
   tasks           Task[]
   conversations   Conversation[]
+  scheduleSlots   ManagerScheduleSlot[]
+  managedAppointmentRequests AppointmentRequest[] @relation("ManagedAppointments")
+  requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
 }
 
 model Task {
@@ -47,9 +50,48 @@ model Conversation {
   userId        String
   user          User          @relation(fields: [userId], references: [id])
   messages      ChatMessage[]
+  appointmentRequests AppointmentRequest[]
 
   @@index([status, createdAt])
   @@index([channel, createdAt])
+}
+
+model ManagerScheduleSlot {
+  id            String   @id @default(uuid())
+  date          DateTime
+  hour          Int
+  isAvailable   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  managerId     String
+  manager       User     @relation(fields: [managerId], references: [id])
+  appointmentRequests AppointmentRequest[]
+
+  @@unique([managerId, date, hour])
+  @@index([date, hour])
+}
+
+model AppointmentRequest {
+  id             String   @id @default(uuid())
+  requestedDate  DateTime
+  requestedHour  Int
+  status         String   @default("pending")
+  justification  String?
+  channel        String   @default("web")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  managerId      String
+  manager        User     @relation("ManagedAppointments", fields: [managerId], references: [id])
+  requesterId    String
+  requester      User     @relation("RequestedAppointments", fields: [requesterId], references: [id])
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  managerSlotId  String?
+  managerSlot    ManagerScheduleSlot? @relation(fields: [managerSlotId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([requestedDate, requestedHour])
+  @@index([managerId, status, createdAt])
 }
 
 model ChatMessage {
