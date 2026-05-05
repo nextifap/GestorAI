@@ -36,10 +36,22 @@ model Task {
   user          User      @relation(fields: [userId], references: [id])
 }
 
+model Contact {
+  id        String  @id @default(uuid())
+  name      String?  // e.g., "John Doe"
+  telephone String   @unique // The phone number or handle
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  conversations Conversation[]
+
+  @@index([id, name, telephone])
+}
+
 model Conversation {
   id            String        @id @default(uuid())
   summary       String
   createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now())
   status        String        @default("active")
   channel       String        @default("web")
   handlingMode  String        @default("Automatizado")
@@ -48,7 +60,10 @@ model Conversation {
   triageScore   Float?
   triageReason  String?
   userId        String
+  contactId     String?
   user          User          @relation(fields: [userId], references: [id])
+  contact       Contact?      @relation(fields: [contactId], references: [id])
+  newMessages   Boolean?
   messages      ChatMessage[]
   appointmentRequests AppointmentRequest[]
 
