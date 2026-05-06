@@ -53,7 +53,6 @@ export async function GET(request) {
     });
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
-    console.log(error);
     await saveSystemLog({
       level: 'ERROR',
       source: 'api/conversations',
