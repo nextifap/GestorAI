@@ -213,7 +213,7 @@ export default function DashboardWorkspace() {
   }, [chatHistory, activeTab]);
 
   useEffect(() => {
-    const handleClickOutside = () => setMenuOpen(menuOpen);
+    const handleClickOutside = () => setMenuOpen(false);
     if (menuOpen) {
       window.addEventListener('click', handleClickOutside);
     }
