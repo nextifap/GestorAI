@@ -227,6 +227,11 @@ export async function POST(req) {
         },
       });
 
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      });
+
       return NextResponse.json({ response: scheduleResponse }, { status: 200 });
     }
 

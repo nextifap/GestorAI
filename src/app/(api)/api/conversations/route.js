@@ -12,13 +12,44 @@ export async function GET(request) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
 
+  const params = request.nextUrl.searchParams;
+
   const { id: userId } = verificacao.usuario;
+  const contactName =  params.get("contact");
+  var contactQuery = null;
+
+  console.log("Contato buscado:", contactName);
+
+  if (contactName) {
+    contactQuery = {
+        OR: [
+          {
+            name: {
+              contains: contactName,
+              mode: "insensitive"
+            }
+          },
+          {
+            telephone: {
+              contains: contactName,
+              mode: "insensitive"
+            }
+          }
+        ]
+      }
+    }
 
   try {
     const conversations = await prisma.conversation.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
+      where: { 
+        userId,
+        ...(contactQuery && { contact: contactQuery })
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        contact: true
+      },
+      take: 50,
     });
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
@@ -46,11 +77,14 @@ export async function POST(request) {
     const newConversation = await prisma.conversation.create({
       data: {
         summary,
-        userId,
+            user: {
+              connect: { id: userId }
+            }
       },
     });
     return NextResponse.json({ conversation: newConversation }, { status: 201 });
   } catch (error) {
+    console.log(error, `USER >>>> ${userId}`);
     await saveSystemLog({
       level: 'ERROR',
       source: 'api/conversations',

@@ -14,6 +14,8 @@ import {
   scheduleLimits,
   validateScheduleInput,
 } from '@/lib/schedule';
+import { formatarData } from '@/lib/utils';
+import SidebarInfo from './components/Sidebar';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
 const tabOptions = [
@@ -23,6 +25,7 @@ const tabOptions = [
   { id: 'handover', label: 'Handover' },
   { id: 'history', label: 'Histórico' },
 ];
+const hideSidebarForTabs = ['chat'];
 
 const capitalizeName = (name) => {
   if (!name) return '';
@@ -218,9 +221,9 @@ export default function DashboardWorkspace() {
     return () => window.removeEventListener('click', handleClickOutside);
   }, [menuOpen]);
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (value = null) => {
     try {
-      const response = await fetch('/api/conversations', { method: 'GET' });
+      const response = await fetch(`/api/conversations?contact=${encodeURIComponent(value || '')}`, { method: 'GET' });
       if (response.ok) {
         const data = await response.json();
         setConversations(data.conversations || []);
@@ -565,13 +568,29 @@ export default function DashboardWorkspace() {
     'Mostre horários disponíveis da semana',
   ];
 
-  const renderChatPanel = () => (
-    <div className="rounded-[28px] border border-white/80 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+  const hideSidebar = () => {
+    return hideSidebarForTabs.includes(activeTab);
+  }
+
+  var lastSearch = null
+
+  const searchContact = (value) => {
+
+    if (lastSearch) clearTimeout(lastSearch);
+
+    lastSearch = setTimeout(() => {
+      fetchConversations(value)
+    }, 300);
+  }
+
+  const renderChatPanel = (className = "") => (    
+    <div className={`rounded-[28px] border border-white/80 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl ${className}`}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-6 py-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Chat</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">{user?.nomeCompleto ? `Olá, ${capitalizeName(user.nomeCompleto)}!` : 'Bem-vindo ao GestorAI'}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">Converse aqui. A agenda e as solicitações ficam em painéis separados para reduzir ruído visual.</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+            {conversations.find((c) => c.id === currentConversationId)?.contact?.name || 'Nova conversa'}
+          </h2>
         </div>
         <div className="hidden md:flex items-center gap-2">
           <button onClick={() => setActiveTab('agenda')} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Ir para agenda</button>
@@ -813,20 +832,48 @@ export default function DashboardWorkspace() {
     </div>
   );
 
-  const renderHistoryPanel = () => (
-    <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Histórico</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Conversas salvas</h2>
+  const renderHistoryPanel = (className = "") => (
+    <div className={`rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl ${className}`}>
+      <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 pb-5">
+        <div className="flex w-full items-center gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Histórico</p>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">Conversas</h2>
+            </div>
+            <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{conversations.length}</span>
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{conversations.length}</span>
+        {/* Filter Chat/Contact */}
+        <div className="flex mt-1 mb-1 bg-slate-50 rounded-xl border border-slate-200">
+          <input
+            type="text"
+            placeholder="Buscar contato..."
+            onChange={(e) => searchContact(e.target.value)}
+            className="w-full px-4 py-2 pl-3 border border-slate-100 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
       </div>
-      <div className="mt-5 grid gap-2">
+      <div className="relative w-full mt-5 grid gap-2">
         {conversations.map((conv) => (
-          <button key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`rounded-2xl border px-4 py-3 text-left transition ${currentConversationId === conv.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
-            <div className="truncate text-sm font-medium text-slate-900">{conv.summary}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{conv.handlingMode || 'Automatizado'}</div>
+          <button key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`relative rounded-2xl border px-4 py-3 text-left transition ${currentConversationId === conv.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-900">
+                {conv?.contact?.name || conv.summary}
+              </span>
+              <span className="text-slate-600 text-[13px]">
+                Contato: {conv?.contact?.telephone || "Sem Telefone"}
+              </span>
+            </div>
+            {conv.newMessages && (
+              <div className="ml-auto absolute top-1 right-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-rose-800">
+                <svg className="h-3 w-3 animate-pulse text-rose-500" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 8 8">
+                  <circle cx="4" cy="4" r="3" />
+                </svg>
+              </div>
+            )}
+            <div className="flex items-center flex-row gap-1 mt-0 text-[11px] uppercase tracking-wide text-slate-500">
+              <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{formatarData(conv.updatedAt)}</div>
+              <div className="mt-1 text-[11px] uppercase font-bold tracking-wide text-slate-500">{conv.handlingMode || 'Automatizado'}</div>
+            </div>
           </button>
         ))}
       </div>
@@ -845,14 +892,26 @@ export default function DashboardWorkspace() {
         return renderHistoryPanel();
       case 'chat':
       default:
-        return renderChatPanel();
+        fetchConversations();
+        return (
+          <div className="flex gap-2 flex-row">
+            {renderHistoryPanel("w-[350px] mr-3")}
+            {renderChatPanel("w-full")}
+          </div>
+        );
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef6ff_0%,_#f8fafc_40%,_#eef2ff_100%)] text-slate-900 flex items-center justify-center">
-        <div className="rounded-3xl border border-white/80 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-xl">Carregando painel...</div>
+        <div className="mt-8 flex flex-col items-center justify-center rounded-3xl border-none border-slate-200 bg-slate-50 py-12">
+          <svg className="h-8 w-8 animate-spin text-sky-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="mt-3 text-sm text-slate-500">Carregando Painel...</span>
+        </div>
       </div>
     );
   }
@@ -860,7 +919,7 @@ export default function DashboardWorkspace() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef6ff_0%,_#f8fafc_40%,_#eef2ff_100%)] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 p-4 lg:p-6">
-        <header className="rounded-[30px] border border-white/80 bg-white/85 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+        <header className="rounded-[30px] relative z-index-999 border border-white/80 bg-white/85 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-200/60">
@@ -888,8 +947,8 @@ export default function DashboardWorkspace() {
             <div className="relative flex items-center gap-2">
               <button onClick={() => setActiveTab('agenda')} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Agenda</button>
               <button onClick={() => setMenuOpen((value) => !value)} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Menu</button>
-              {menuOpen && (
-                <div className="absolute right-0 top-14 z-30 w-56 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_20px_60px_rgba(15,23,42,0.15)]" onClick={(event) => event.stopPropagation()}>
+              {(menuOpen) && (
+                <div className="absolute right-0 top-14 z-9999 w-56 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_20px_60px_rgba(15,23,42,0.15)]" onClick={(event) => event.stopPropagation()}>
                   <button onClick={() => { handleExport(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Exportar tarefas</button>
                   <button onClick={() => { document.getElementById('file-input').click(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Importar tarefas</button>
                   <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50">Sair</button>
@@ -919,28 +978,10 @@ export default function DashboardWorkspace() {
           </div>
         </header>
 
-        <main className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <main className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)]">
           <section className="min-h-0">{renderActivePanel()}</section>
 
-          <aside className="flex min-h-0 flex-col gap-4">
-            <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Como usar</h3>
-              <div className="mt-4 space-y-3 text-sm text-slate-600">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">1. Use as abas para mostrar só o necessário.</div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">2. Clique em um dia/horário para abrir o modal de agenda.</div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">3. Solicitantes e handover ficam separados do chat.</div>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Legenda</h3>
-              <div className="mt-4 space-y-2 text-sm text-slate-600">
-                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-500" /> Livre</div>
-                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-rose-500" /> Ocupado</div>
-                <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-slate-300" /> Fechado / indisponível</div>
-              </div>
-            </div>
-          </aside>
+          {!hideSidebar() && <SidebarInfo />}
         </main>
       </div>
 
