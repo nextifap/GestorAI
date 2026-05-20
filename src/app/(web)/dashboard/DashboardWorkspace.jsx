@@ -16,12 +16,14 @@ import {
 } from '@/lib/schedule';
 import { formatarData } from '@/lib/utils';
 import SidebarInfo from './components/Sidebar';
+import initEventSourceChatMessage from '@/app/(web)/chatEvent.js';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
 const tabOptions = [
   { id: 'chat', label: 'Chat' },
   { id: 'agenda', label: 'Agenda' },
   { id: 'requests', label: 'Solicitações' },
+  { id: 'contacts', label: 'Contatos' },
   { id: 'handover', label: 'Handover' },
   { id: 'history', label: 'Histórico' },
 ];
@@ -152,6 +154,7 @@ function Modal({ open, title, subtitle, onClose, children }) {
 export default function DashboardWorkspace() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [contacts, setContacts] = useState([]);
   const [chatHistory, setChatHistory] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [handoverQueue, setHandoverQueue] = useState([]);
@@ -176,6 +179,10 @@ export default function DashboardWorkspace() {
   const blockedSlotsCount = scheduleSlots.length - availableSlotsCount;
 
   useEffect(() => {
+    initEventSourceChatMessage();
+  }, []);
+
+  useEffect(() => {
     const checkAuth = async () => {
       try {
         const meResponse = await fetch('/api/auth/me', { method: 'GET' });
@@ -191,12 +198,14 @@ export default function DashboardWorkspace() {
         }
 
         setUser(meData.user);
+
         await Promise.all([
           fetchConversations(),
           fetchHandoverQueue(),
           fetchScheduleSlots(),
           fetchAppointmentRequests(),
         ]);
+
         setLoading(false);
       } catch {
         router.push('/login');
@@ -234,6 +243,20 @@ export default function DashboardWorkspace() {
       // Mantém o estado atual.
     }
   };
+
+  const fetchContacts = async () => {
+    try {
+      const response = await fetch(`/api/contacts`, { method: 'GET' });
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data.conversations || []);
+      } else if (response.status === 401) {
+        router.push('/login');
+      }
+    } catch {
+      // Mantém o estado atual.
+    }
+  }
 
   const fetchHandoverQueue = async () => {
     try {
@@ -583,6 +606,15 @@ export default function DashboardWorkspace() {
     }, 300);
   }
 
+  useEffect(() => {
+    setContacts
+
+    switch (activeTab) {
+      case 'chat': fetchConversations(); break;
+      case 'contacts': fetchContacts(); break;
+    }
+  }, [activeTab]);
+
   const renderChatPanel = (className = "") => (    
     <div className={`rounded-[28px] border border-white/80 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl ${className}`}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-6 py-5">
@@ -880,6 +912,31 @@ export default function DashboardWorkspace() {
     </div>
   );
 
+  const renderContactsPanel = () => (
+    <div onClick={() => {}} className={`rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl`}>
+      <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 pb-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Contatos</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Lista de contatos</h2>
+        </div>
+      </div>
+      <div className="relative w-full mt-5 grid gap-2">
+        {contacts.map((contact) => (
+          <div key={contact.id} className={`relative rounded-2xl border px-4 py-3 text-left transition`}>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-900">
+                {contact.name}
+              </span>
+              <span className="text-slate-600 text-[13px]">
+                Telefone: {contact.telephone || "Sem Telefone"}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderActivePanel = () => {
     switch (activeTab) {
       case 'agenda':
@@ -890,9 +947,10 @@ export default function DashboardWorkspace() {
         return renderHandoverPanel();
       case 'history':
         return renderHistoryPanel();
+      case 'contacts':
+        return renderContactsPanel();
       case 'chat':
       default:
-        fetchConversations();
         return (
           <div className="flex gap-2 flex-row">
             {renderHistoryPanel("w-[350px] mr-3")}
