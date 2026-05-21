@@ -50,3 +50,5 @@ next-env.d.ts
 *.md
 !README.md
 
+docker-compose.yml
+
