@@ -117,7 +117,13 @@ export function isHolidayDate(dateLike) {
   return false;
 }
 
-export function getDateBlockReason(dateLike, referenceDate = new Date()) {
+function getHourInTimeZone(dateLike, timeZone = BUSINESS_TIMEZONE) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, hour: '2-digit', hour12: false }).formatToParts(dateLike);
+  const hour = parts.find((p) => p.type === 'hour')?.value;
+  return hour ? Number(hour) : null;
+}
+
+export function getDateBlockReason(dateLike, hour = null, referenceDate = new Date()) {
   const normalizedDate = dateLike instanceof Date ? dateLike : parseIsoDateOnly(dateLike);
   if (!normalizedDate) {
     return 'Data inválida. Use o formato YYYY-MM-DD.';
@@ -128,6 +134,15 @@ export function getDateBlockReason(dateLike, referenceDate = new Date()) {
 
   if (todayIso && targetIso && targetIso < todayIso) {
     return 'Não é permitido agendar datas retroativas.';
+  }
+
+  // Bloqueia horários retroativos no mesmo dia quando a hora informada já passou
+  if (hour !== null && todayIso && targetIso && targetIso === todayIso) {
+    const currentLocalHour = getHourInTimeZone(referenceDate, BUSINESS_TIMEZONE);
+    const parsedHour = Number(hour);
+    if (Number.isFinite(parsedHour) && Number.isFinite(currentLocalHour) && parsedHour <= currentLocalHour) {
+      return 'Não é permitido agendar horários retroativos.';
+    }
   }
 
   if (!isBusinessDay(normalizedDate)) {
@@ -151,7 +166,10 @@ export function parseIsoDateOnly(value) {
   }
 
   const [year, month, day] = text.split('-').map(Number);
-  const normalized = new Date(Date.UTC(year, month - 1, day));
+  // Create date at midday UTC to avoid timezone shifts when converting
+  // to the business timezone (America/Fortaleza). Using 12:00 UTC keeps
+  // the local date stable across timezones with negative offsets.
+  const normalized = new Date(Date.UTC(year, month - 1, day, 12));
   if (
     normalized.getUTCFullYear() !== year
     || normalized.getUTCMonth() !== month - 1
@@ -195,7 +213,7 @@ export function validateScheduleInput({ date, hour }) {
     return { ok: false, error: 'Data inválida. Use o formato YYYY-MM-DD.' };
   }
 
-  const dateBlockReason = getDateBlockReason(normalizedDate);
+  const dateBlockReason = getDateBlockReason(normalizedDate, parsedHour, new Date());
   if (dateBlockReason) {
     return { ok: false, error: dateBlockReason };
   }

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "seed:unifap": "node prisma/seed_unifap.js",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -129,3 +129,92 @@ model SystemLog {
   @@index([createdAt])
   @@index([level])
 }
+
+// Models adicionados para suportar ingestão de metadados UniFAP
+model Institution {
+  id           String   @id @default(uuid())
+  name         String
+  shortName    String?  @map("short_name")
+  city         String?
+  state        String?
+  country      String?
+  foundedYear  Int?     @map("founded_year")
+  status       String?
+  description  String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  courses        Course[]
+  calendarEvents AcademicCalendarEvent[]
+  infrastructures Infrastructure[]
+  facultyMembers  FacultyMember[]
+  ragMetadata     RagMetadata[]
+}
+
+model Course {
+  id                String   @id @default(uuid())
+  institutionId     String   @map("institution_id")
+  institution       Institution @relation(fields: [institutionId], references: [id])
+  name              String
+  code              String?
+  degree            String?
+  durationSemesters Int?     @map("duration_semesters")
+  workloadHours     Int?     @map("workload_hours")
+  objective         String?
+  audience          String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  curriculumOverviews CurriculumOverview[]
+}
+
+model CurriculumOverview {
+  id        String   @id @default(uuid())
+  courseId  String   @map("course_id")
+  course    Course   @relation(fields: [courseId], references: [id])
+  semester  Int?
+  topics    String?
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model AcademicCalendarEvent {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  title         String
+  eventDate     DateTime? @map("event_date")
+  description   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+}
+
+model Infrastructure {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String
+  description   String?
+  features      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+}
+
+model FacultyMember {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String
+  role          String?
+  profile       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+}
+
+model RagMetadata {
+  id          String   @id @default(uuid())
+  source      String
+  tags        String[]
+  version     String?
+  language    String?
+  lastUpdated DateTime? @map("last_updated")
+  raw         Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  institutionId String? @map("institution_id")
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+}

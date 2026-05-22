@@ -6,7 +6,12 @@
 
 */
 -- AlterTable
-ALTER TABLE "Conversation" ADD COLUMN     "contactId" TEXT NOT NULL;
+-- Nota: originalmente essa coluna foi criada como NOT NULL e causou falha
+-- quando havia registros existentes em "Conversation" com valor NULL.
+-- Para permitir aplicar a migration em bases com dados existentes,
+-- adicionamos a coluna como NULLABLE. Depois faça um migration
+-- separado para tornar NOT NULL após backfill.
+ALTER TABLE "Conversation" ADD COLUMN "contactId" TEXT;
 
 -- DropTable
 DROP TABLE "CurriculumChunk";

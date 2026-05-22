@@ -10,6 +10,7 @@ import {
   formatSlotPtBr,
   formatDateDDMMYYYY,
   getDateBlockReason,
+  getHolidayName,
   getTodayIsoDate,
   scheduleLimits,
   validateScheduleInput,
@@ -26,6 +27,7 @@ const tabOptions = [
   { id: 'history', label: 'Histórico' },
 ];
 const hideSidebarForTabs = ['chat'];
+const CONVERSATIONS_PER_PAGE = 8;
 
 const capitalizeName = (name) => {
   if (!name) return '';
@@ -83,6 +85,32 @@ const getBusinessDays = (referenceDate = new Date(), count = 5) => {
     }
 
     attempts += 1;
+  }
+
+  return days;
+};
+
+// Retorna os 7 dias da semana (domingo -> sábado) para exibição do calendário.
+const getWeekDays = (referenceDate = new Date()) => {
+  const days = [];
+  const date = new Date(referenceDate);
+  date.setHours(12, 0, 0, 0);
+
+  // Ajusta para o domingo da semana atual
+  const dayOfWeek = date.getDay(); // 0 (Dom) - 6 (Sáb)
+  const sunday = new Date(date);
+  sunday.setDate(date.getDate() - dayOfWeek);
+
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    days.push({
+      iso,
+      label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+      day: d.getDate(),
+      ddmm: formatDateDDMMYYYY(iso),
+    });
   }
 
   return days;
@@ -165,11 +193,14 @@ export default function DashboardWorkspace() {
   const [slotModal, setSlotModal] = useState({ open: false, mode: 'create', slot: null, date: '', hour: scheduleLimits.startHour, isAvailable: true });
   const [requestModal, setRequestModal] = useState({ open: false, request: null, justification: '' });
   const [rejectReasonById, setRejectReasonById] = useState({});
+  const [historyPage, setHistoryPage] = useState(1);
   const router = useRouter();
   const chatEndRef = useRef(null);
 
   const todayIso = useMemo(() => getTodayIsoDate(), []);
   const businessDays = useMemo(() => getBusinessDays(new Date(), 5), []);
+  const [weekStartDate, setWeekStartDate] = useState(() => { const d = new Date(); d.setHours(12, 0, 0, 0); return d; });
+  const weekDays = useMemo(() => getWeekDays(weekStartDate), [weekStartDate]);
   const slotsByDate = useMemo(() => buildSlotsMap(scheduleSlots), [scheduleSlots]);
   const requestsByDate = useMemo(() => buildRequestsMap(appointmentRequests), [appointmentRequests]);
   const availableSlotsCount = scheduleSlots.filter((slot) => slot.isAvailable).length;
@@ -249,9 +280,10 @@ export default function DashboardWorkspace() {
     }
   };
 
-  const fetchScheduleSlots = async () => {
+  const fetchScheduleSlots = async (from = null) => {
     try {
-      const response = await fetch(`/api/schedule/slots?from=${todayIso || ''}`, { method: 'GET' });
+      const f = from || todayIso || '';
+      const response = await fetch(`/api/schedule/slots?from=${encodeURIComponent(f)}`, { method: 'GET' });
       if (response.ok) {
         const data = await response.json();
         setScheduleSlots(data.slots || []);
@@ -262,6 +294,12 @@ export default function DashboardWorkspace() {
       // Mantém o estado atual.
     }
   };
+
+  useEffect(() => {
+    // Carrega slots para a semana visível quando o início da semana mudar
+    const fromIso = weekDays && weekDays[0] ? weekDays[0].iso : todayIso;
+    fetchScheduleSlots(fromIso);
+  }, [weekStartDate]);
 
   const fetchAppointmentRequests = async () => {
     try {
@@ -684,15 +722,21 @@ export default function DashboardWorkspace() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Agenda</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-900">Calendário semanal</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">A agenda aparece apenas aqui. Slots passados e feriados ficam indisponíveis e não podem ser agendados.</p>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">A agenda aparece apenas aqui. Slots passados, finais de semana (exibidos para contexto) e feriados ficam indisponíveis; apenas segunda a sexta estão disponíveis para agendamento.</p>
         </div>
-        <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm text-slate-600">{formatWeekRange(businessDays)}</div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setWeekStartDate((d) => { const nd = new Date(d); nd.setDate(nd.getDate() - 7); return nd; })} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700">‹</button>
+          <div className="rounded-2xl bg-slate-100 px-4 py-2 text-sm text-slate-600">{formatWeekRange(weekDays)}</div>
+          <button onClick={() => setWeekStartDate((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + 7); return nd; })} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700">›</button>
+          <button onClick={() => { const nd = new Date(); nd.setHours(12,0,0,0); setWeekStartDate(nd); }} className="ml-2 rounded-2xl border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700">Semana atual</button>
+        </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-[64px_repeat(5,minmax(0,1fr))] gap-2 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50 p-3">
+      <div className="mt-5 grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-2 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50 p-3">
         <div />
-        {businessDays.map((day) => {
+        {weekDays.map((day) => {
           const blocked = getDateBlockReason(day.iso);
+          const holidayName = getHolidayName(day.iso);
           const daySlots = slotsByDate[day.iso] || {};
           const dayRequests = requestsByDate[day.iso] || [];
 
@@ -701,7 +745,10 @@ export default function DashboardWorkspace() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{day.label}</div>
               <div className="mt-1 text-xs font-semibold text-sky-700">{day.ddmm}</div>
               <div className="mt-0.5 text-xl font-semibold text-slate-900">{day.day}</div>
-              <div className="mt-2 text-[11px] text-slate-500">{blocked ? blocked : `${Object.values(daySlots).filter((slot) => slot.isAvailable).length} livres`}</div>
+              <div className="mt-2 text-[11px] text-slate-500">{blocked ? (holidayName || blocked) : `${Object.values(daySlots).filter((slot) => slot.isAvailable).length} livres`}</div>
+              {holidayName && (
+                <div className="mt-1 text-sm font-semibold text-rose-700">{holidayName}</div>
+              )}
               {dayRequests.length > 0 && (
                 <div className="mt-1 text-[10px] font-semibold text-amber-700">
                   {dayRequests.length} {dayRequests.length === 1 ? 'solicitação' : 'solicitações'}
@@ -714,16 +761,17 @@ export default function DashboardWorkspace() {
         {businessHours.map((hour) => (
           <Fragment key={`hour-${hour}`}>
             <div key={`hour-label-${hour}`} className="flex items-center justify-end pr-2 text-[11px] font-semibold text-slate-400">{String(hour).padStart(2, '0')}:00</div>
-            {businessDays.map((day) => {
+            {weekDays.map((day) => {
               const slot = slotsByDate[day.iso]?.[hour] || null;
-              const blockedReason = getDateBlockReason(day.iso);
+              const blockedReason = getDateBlockReason(day.iso, hour);
+              const holidayName = getHolidayName(day.iso);
               const requests = (requestsByDate[day.iso] || []).filter((request) => Number(request.hour) === hour);
               const cellStatus = slot
                 ? slot.isAvailable
                   ? 'Livre'
                   : 'Ocupado'
                 : blockedReason
-                  ? 'Fechado'
+                  ? (holidayName || 'Fechado')
                   : 'Adicionar';
 
               const tone = slot
@@ -739,7 +787,7 @@ export default function DashboardWorkspace() {
                   key={`${day.iso}-${hour}`}
                   onClick={() => {
                     if (blockedReason) {
-                      setNotice(blockedReason);
+                      setNotice(holidayName || blockedReason);
                       return;
                     }
 
@@ -762,7 +810,7 @@ export default function DashboardWorkspace() {
                     </div>
                     <div className={`h-2.5 w-2.5 rounded-full ${slot ? (slot.isAvailable ? 'bg-emerald-500' : 'bg-rose-500') : (blockedReason ? 'bg-slate-300' : 'bg-slate-300 group-hover:bg-sky-400')}`} />
                   </div>
-                  <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-current/60">{slot ? 'Slot cadastrado' : blockedReason ? 'Agenda fechada' : 'Clique para criar'}</div>
+                  <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-current/60">{slot ? 'Slot cadastrado' : blockedReason ? (holidayName ? `Feriado: ${holidayName}` : 'Agenda fechada') : 'Clique para criar'}</div>
                 </button>
               );
             })}
@@ -772,8 +820,8 @@ export default function DashboardWorkspace() {
 
       <div className="mt-4 grid gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
         <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Clique em um horário para abrir o modal de edição.</div>
-        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Datas passadas e feriados já chegam bloqueadas.</div>
-        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">O gestor mantém a agenda aberta por padrão, salvo horários ocupados.</div>
+        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Datas passadas, finais de semana e feriados já chegam bloqueados.</div>
+        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">O gestor mantém a agenda aberta por padrão, salvo horários ocupados e exceções configuradas.</div>
       </div>
     </div>
   );
@@ -832,53 +880,99 @@ export default function DashboardWorkspace() {
     </div>
   );
 
-  const renderHistoryPanel = (className = "") => (
-    <div className={`rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl ${className}`}>
-      <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 pb-5">
-        <div className="flex w-full items-center gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Histórico</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">Conversas</h2>
-            </div>
-            <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{conversations.length}</span>
-        </div>
-        {/* Filter Chat/Contact */}
-        <div className="flex mt-1 mb-1 bg-slate-50 rounded-xl border border-slate-200">
-          <input
-            type="text"
-            placeholder="Buscar contato..."
-            onChange={(e) => searchContact(e.target.value)}
-            className="w-full px-4 py-2 pl-3 border border-slate-100 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-      <div className="relative w-full mt-5 grid gap-2">
-        {conversations.map((conv) => (
-          <button key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`relative rounded-2xl border px-4 py-3 text-left transition ${currentConversationId === conv.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-slate-900">
-                {conv?.contact?.name || conv.summary}
-              </span>
-              <span className="text-slate-600 text-[13px]">
-                Contato: {conv?.contact?.telephone || "Sem Telefone"}
-              </span>
-            </div>
-            {conv.newMessages && (
-              <div className="ml-auto absolute top-1 right-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-rose-800">
-                <svg className="h-3 w-3 animate-pulse text-rose-500" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 8 8">
-                  <circle cx="4" cy="4" r="3" />
-                </svg>
+  const renderHistoryPanel = (className = "") => {
+    const totalPages = Math.ceil(conversations.length / CONVERSATIONS_PER_PAGE);
+    const startIdx = (historyPage - 1) * CONVERSATIONS_PER_PAGE;
+    const endIdx = startIdx + CONVERSATIONS_PER_PAGE;
+    const paginatedConversations = conversations.slice(startIdx, endIdx);
+
+    return (
+      <div className={`rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl ${className}`}>
+        <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 pb-5">
+          <div className="flex w-full items-center gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Histórico</p>
+                <h2 className="mt-1 text-2xl font-semibold text-slate-900">Conversas</h2>
               </div>
-            )}
-            <div className="flex items-center flex-row gap-1 mt-0 text-[11px] uppercase tracking-wide text-slate-500">
-              <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{formatarData(conv.updatedAt)}</div>
-              <div className="mt-1 text-[11px] uppercase font-bold tracking-wide text-slate-500">{conv.handlingMode || 'Automatizado'}</div>
+              <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{conversations.length}</span>
+          </div>
+          {/* Filter Chat/Contact */}
+          <div className="flex mt-1 mb-1 bg-slate-50 rounded-xl border border-slate-200">
+            <input
+              type="text"
+              placeholder="Buscar contato..."
+              onChange={(e) => {
+                setHistoryPage(1);
+                searchContact(e.target.value);
+              }}
+              className="w-full px-4 py-2 pl-3 border border-slate-100 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="relative w-full mt-5 grid gap-2 max-h-[calc(100vh-400px)] overflow-y-auto">
+          {paginatedConversations.length === 0 && conversations.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Nenhuma conversa encontrada.</div>
+          )}
+          {paginatedConversations.map((conv) => (
+            <button key={conv.id} onClick={() => handleHistoryClick(conv.id)} className={`relative rounded-2xl border px-4 py-3 text-left transition ${currentConversationId === conv.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-slate-900">
+                  {conv?.contact?.name || conv.summary}
+                </span>
+                <span className="text-slate-600 text-[13px]">
+                  Contato: {conv?.contact?.telephone || "Sem Telefone"}
+                </span>
+              </div>
+              {conv.newMessages && (
+                <div className="ml-auto absolute top-1 right-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-rose-800">
+                  <svg className="h-3 w-3 animate-pulse text-rose-500" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3" />
+                  </svg>
+                </div>
+              )}
+              <div className="flex items-center flex-row gap-1 mt-0 text-[11px] uppercase tracking-wide text-slate-500">
+                <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{formatarData(conv.updatedAt)}</div>
+                <div className="mt-1 text-[11px] uppercase font-bold tracking-wide text-slate-500">{conv.handlingMode || 'Automatizado'}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-200 pt-4">
+            <button
+              onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+              disabled={historyPage === 1}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:bg-slate-50"
+            >
+              ← Anterior
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setHistoryPage(page)}
+                  className={`h-8 w-8 rounded-lg text-sm font-medium transition ${
+                    historyPage === page
+                      ? 'bg-sky-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
             </div>
-          </button>
-        ))}
+            <button
+              onClick={() => setHistoryPage((p) => Math.min(totalPages, p + 1))}
+              disabled={historyPage === totalPages}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:bg-slate-50"
+            >
+              Próximo →
+            </button>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderActivePanel = () => {
     switch (activeTab) {
@@ -894,8 +988,8 @@ export default function DashboardWorkspace() {
       default:
         fetchConversations();
         return (
-          <div className="flex gap-2 flex-row">
-            {renderHistoryPanel("w-[350px] mr-3")}
+          <div className="flex gap-2 flex-row h-full">
+            {renderHistoryPanel("w-[350px] mr-3 flex flex-col")}
             {renderChatPanel("w-full")}
           </div>
         );
