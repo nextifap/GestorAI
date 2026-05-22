@@ -1,13 +1,7 @@
-import { NextResponse } from "next/server";
 import clients from "@/lib/see-clients";
 
-export async function GET(request, { params }) {
-
-    const parametro = params.parametro;
-
+const receiveAMessage = (message) => {
     for (const client of clients) {
-        let body = null;
-        console.log("OPA TO AKI Ó>>> ", client)
         try {
             client.enqueue(
             `data: ${JSON.stringify(parametro)}\n\n`
@@ -17,9 +11,11 @@ export async function GET(request, { params }) {
             console.error("Erro ao enviar mensagem para cliente:", err);
         }
     }
-
-    return NextResponse.json(
-        { message: 'OK.' }, 
-        { status: 200 }
-    );
 }
+
+const sendAMessage = (message) => {
+    // Lógica para enviar uma mensagem para o Telegram
+    console.log("Enviando mensagem para o Telegram:", message);
+}
+
+export default {receiveAMessage, sendAMessage};

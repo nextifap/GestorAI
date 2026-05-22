@@ -1,4 +1,4 @@
-const chatConnection = {};
+var chatConnection = {};
 
 export default function initChatMessageEventSource() {
 
