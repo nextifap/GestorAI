@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose';
 
 // Rotas que não precisam de autenticação (públicas)
 const rotasPublicas = ['/', '/cadastro', '/login'];
-const rotasPublicasApi = ['/api/auth/login', '/api/auth/register', '/api/telegram-webhook'];
+const rotasPublicasApi = ['/api/auth/login', '/api/auth/register', '/api/telegram-webhook', '/api/chat/webhook/telegram'];
 
 function isRotaPublica(pathname) {
   return rotasPublicas.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));

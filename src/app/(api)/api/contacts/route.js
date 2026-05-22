@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '../../../../../lib/prisma';
+import prisma from '../../../../lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { errorResponse, respondAuthError } from '@/lib/apiErrors';
@@ -13,31 +13,26 @@ export async function GET(request) {
   const { id: userId } = verificacao.usuario;
 
   try {
-    const queue = await prisma.conversation.findMany({
+    const contacts = await prisma.contact.findMany({
       where: {
         userId,
-        channel: 'telegram',
-        status: 'handover_pending',
+        OR: [
+          { deleted: null },
+          { deleted: 0 }
+        ]
       },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 3,
-        },
-      },
-      take: 25,
+      orderBy: { name: 'desc' }
     });
 
-    return NextResponse.json({ queue }, { status: 200 });
+    return NextResponse.json({ contacts }, { status: 200 });
   } catch (error) {
     await saveSystemLog({
       level: 'ERROR',
       source: 'api/handover/queue',
-      message: 'Erro ao buscar fila de handover.',
+      message: 'Erro ao buscar contact.',
       context: { error, userId },
     });
 
-    return errorResponse('HANDOVER_QUEUE_FETCH_FAILED');
+    return errorResponse('CONTACTS_FETCH_FAILED');
   }
 }

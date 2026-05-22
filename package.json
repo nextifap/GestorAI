@@ -19,6 +19,7 @@
     "date-holidays": "^3.27.0",
     "dotenv": "^17.2.2",
     "groq-sdk": "^0.32.0",
+    "input": "^1.0.1",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "next": "15.5.2",
@@ -27,6 +28,7 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
+    "telegram": "^2.26.22",
     "zod": "^3.25.76"
   },
   "devDependencies": {

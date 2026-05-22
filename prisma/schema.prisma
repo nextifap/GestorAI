@@ -22,6 +22,9 @@ model User {
   tasks           Task[]
   conversations   Conversation[]
   scheduleSlots   ManagerScheduleSlot[]
+  contacts        Contact[]
+
+
   managedAppointmentRequests AppointmentRequest[] @relation("ManagedAppointments")
   requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
 }
@@ -39,11 +42,13 @@ model Task {
 model Contact {
   id        String  @id @default(uuid())
   name      String?  // e.g., "John Doe"
-  telephone String   @unique // The phone number or handle
+  telephone String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   conversations Conversation[]
-
+  userId String? // Refere-se a um contato de um outro User
+  user User?      @relation(fields: [userId], references: [id])
+  deleted Int?
   @@index([id, name, telephone])
 }
 

@@ -5,12 +5,13 @@ import prisma from '../../../../lib/prisma';
 import { stringify } from 'csv-stringify';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 // Rota de Exportar (puxa do banco para o computador)
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -55,6 +56,6 @@ export async function GET(request) {
       message: 'Erro ao exportar tarefas.',
       context: { error, userId },
     });
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return errorResponse('EXPORT_FAILED');
   }
 }
