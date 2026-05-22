@@ -16,7 +16,6 @@ import {
 } from '@/lib/schedule';
 import { formatarData } from '@/lib/utils';
 import SidebarInfo from './components/Sidebar';
-import initEventSourceChatMessage from '@/app/(web)/chatEvent.js';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
 const tabOptions = [
@@ -178,8 +177,15 @@ export default function DashboardWorkspace() {
   const availableSlotsCount = scheduleSlots.filter((slot) => slot.isAvailable).length;
   const blockedSlotsCount = scheduleSlots.length - availableSlotsCount;
 
+  const [poolingIntervalId, setPoolingIntervalId] = useState(false);
+
   useEffect(() => {
-    initEventSourceChatMessage();
+    if (poolingIntervalId) clearInterval(poolingIntervalId);
+
+    setPoolingIntervalId(setInterval(() => {
+      fetchConversations(null, 'true');
+      console.log("Atualizando conversas... ", new Date().toLocaleTimeString());
+    }, 5000));
   }, []);
 
   useEffect(() => {
@@ -230,12 +236,31 @@ export default function DashboardWorkspace() {
     return () => window.removeEventListener('click', handleClickOutside);
   }, [menuOpen]);
 
-  const fetchConversations = async (value = null) => {
+  const fetchConversations = async (value = null, newMessages = null) => {
     try {
-      const response = await fetch(`/api/conversations?contact=${encodeURIComponent(value || '')}`, { method: 'GET' });
+      const response = await fetch(`/api/conversations?contact=${encodeURIComponent(value || '')}&newMessages=${newMessages}`, { method: 'GET' });
       if (response.ok) {
         const data = await response.json();
-        setConversations(data.conversations || []);
+        if (newMessages === 'true') { 
+            data?.conversations?.forEach((conv) => {
+              if (data.conversations.filter((c) => c.id == conv.id).length === 0) { 
+                data.conversations.push(conv);
+              } else {
+                // Atualiza a conversa existente com os novos dados (como mensagens não lidas)
+                const updated = data.conversations.map(a => {
+                  if (a.id === conv.id) {
+                    return {
+                      ...conv
+                    };
+                  }
+                  return item;
+                });
+                setConversations(updated);
+              }
+            });
+        } else {
+          setConversations(data.conversations || []);
+        }
       } else if (response.status === 401) {
         router.push('/login');
       }

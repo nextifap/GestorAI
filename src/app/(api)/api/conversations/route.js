@@ -4,53 +4,23 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import conversationService from '../../services/conversationService';
 
 // Rota GET para buscar o histórico de conversas
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
+  const params = request.nextUrl.searchParams;
+  
+  const { id: userId } = verificacao.usuario;
+  const contactName =  params.get("contact");
+  const newMessages =  params.get("newMessages") === "true";
+
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
 
-  const params = request.nextUrl.searchParams;
-
-  const { id: userId } = verificacao.usuario;
-  const contactName =  params.get("contact");
-  var contactQuery = null;
-
-  console.log("Contato buscado:", contactName);
-
-  if (contactName) {
-    contactQuery = {
-        OR: [
-          {
-            name: {
-              contains: contactName,
-              mode: "insensitive"
-            }
-          },
-          {
-            telephone: {
-              contains: contactName,
-              mode: "insensitive"
-            }
-          }
-        ]
-      }
-    }
-
   try {
-    const conversations = await prisma.conversation.findMany({
-      where: { 
-        userId,
-        ...(contactQuery && { contact: contactQuery })
-      },
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        contact: true
-      },
-      take: 50,
-    });
+    const conversations = await conversationService.getConversations(contactName, userId, newMessages);
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
     await saveSystemLog({

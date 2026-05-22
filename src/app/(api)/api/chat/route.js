@@ -13,7 +13,6 @@ import {
   formatSlotPtBr,
 } from '@/lib/schedule';
 import { resolveManagerUserId } from '@/lib/manager';
-import { webhookMessage } from './chatEvent';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY?.trim(),
@@ -147,8 +146,6 @@ export async function GET() {
 
 // Rota POST
 export async function POST(req) {
-
-  webhookMessage("opa, testando endpoint de chat");
 
   // Verifica JWT
   const verificacao = verifyRequestToken(req);
