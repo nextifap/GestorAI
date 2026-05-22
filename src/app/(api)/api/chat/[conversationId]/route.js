@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 // Rota GET para buscar todas as mensagens de uma conversa
 export async function GET(request, { params }) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -28,7 +29,7 @@ export async function GET(request, { params }) {
     });
 
     if (!conversationWithMessages) {
-      return NextResponse.json({ error: 'Conversa não encontrada ou não pertence ao usuário.' }, { status: 404 });
+      return errorResponse('CHAT_CONVERSATION_NOT_FOUND');
     }
 
     return NextResponse.json({ conversation: conversationWithMessages }, { status: 200 });
@@ -40,6 +41,6 @@ export async function GET(request, { params }) {
       message: 'Erro ao buscar mensagens da conversa.',
       context: { error, conversationId, userId },
     });
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return errorResponse('CHAT_MESSAGES_FETCH_FAILED');
   }
 }

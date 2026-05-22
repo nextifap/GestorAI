@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { validateScheduleInput, parseIsoDateOnly, toIsoDateOnly, getTodayIsoDate } from '@/lib/schedule';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 function buildDateRange(searchParams) {
   const fromParam = searchParams.get('from');
@@ -33,7 +34,7 @@ function buildDateRange(searchParams) {
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -41,7 +42,7 @@ export async function GET(request) {
   try {
     const range = buildDateRange(new URL(request.url).searchParams);
     if (!range) {
-      return NextResponse.json({ error: 'Parâmetros de data inválidos.' }, { status: 400 });
+      return errorResponse('SCHEDULE_DATE_RANGE_INVALID');
     }
 
     const slots = await prisma.managerScheduleSlot.findMany({
@@ -71,14 +72,14 @@ export async function GET(request) {
       context: { error, managerId },
     });
 
-    return NextResponse.json({ error: 'Erro ao buscar agenda.' }, { status: 500 });
+    return errorResponse('SCHEDULE_FETCH_FAILED');
   }
 }
 
 export async function POST(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -87,12 +88,12 @@ export async function POST(request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+    return errorResponse('JSON_INVALID');
   }
 
   const validation = validateScheduleInput({ date: body?.date, hour: body?.hour });
   if (!validation.ok) {
-    return NextResponse.json({ error: validation.error }, { status: 400 });
+    return errorResponse('SCHEDULE_VALIDATION_ERROR', { message: validation.error });
   }
 
   const isAvailable = body?.isAvailable !== false;
@@ -133,6 +134,6 @@ export async function POST(request) {
       context: { error, managerId },
     });
 
-    return NextResponse.json({ error: 'Erro ao salvar slot da agenda.' }, { status: 500 });
+    return errorResponse('SCHEDULE_SLOT_SAVE_FAILED');
   }
 }

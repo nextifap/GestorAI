@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getApiErrorMessage } from '@/lib/apiClient';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -30,8 +31,10 @@ export default function LoginPage() {
         body: JSON.stringify({ email, senha: password }),
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Erro ao fazer login');
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, 'Erro ao fazer login');
+        throw new Error(message);
+      }
 
       setMessage('Login realizado com sucesso!');
       setMessageType('success');

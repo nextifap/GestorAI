@@ -6,6 +6,7 @@ import Groq from 'groq-sdk';
 import { z } from 'zod';
 import prisma from '../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
+import { errorResponse } from '@/lib/apiErrors';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -158,7 +159,7 @@ export async function POST(request) {
           message: 'Webhook Telegram rejeitado por segredo inválido.',
           context: { hasSecretHeader: Boolean(secretHeader) },
         });
-        return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+        return errorResponse('TELEGRAM_UNAUTHORIZED');
       }
     }
 
@@ -181,7 +182,7 @@ export async function POST(request) {
           hasTelegramUserId: Boolean(telegramUserId),
         },
       });
-      return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 });
+      return errorResponse('TELEGRAM_INVALID_PAYLOAD');
     }
 
     const normalizedTelegramId = String(telegramUserId);
@@ -276,7 +277,7 @@ export async function POST(request) {
         chatId,
         'Nao foi possivel processar sua solicitacao no momento. Tente novamente em instantes.',
       );
-      return NextResponse.json({ error: 'Falha no processamento da conversa.' }, { status: 500 });
+      return errorResponse('TELEGRAM_CHAT_FAILED');
     }
 
     const result = await chatResponse.json();
@@ -291,7 +292,7 @@ export async function POST(request) {
         message: 'Erro ao enviar mensagem para Telegram.',
         context: { telegramStatus: telegramResponse.status, chatId },
       });
-      return NextResponse.json({ error: 'Falha ao enviar mensagem ao Telegram.' }, { status: 500 });
+      return errorResponse('TELEGRAM_SEND_FAILED');
     }
 
     return NextResponse.json(
@@ -314,6 +315,6 @@ export async function POST(request) {
         errorMessage: error instanceof Error ? error.message : 'Erro desconhecido',
       },
     });
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return errorResponse('INTERNAL_ERROR');
   }
 }

@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../../lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -37,6 +38,6 @@ export async function GET(request) {
       context: { error, userId },
     });
 
-    return NextResponse.json({ error: 'Erro ao buscar fila de handover.' }, { status: 500 });
+    return errorResponse('HANDOVER_QUEUE_FETCH_FAILED');
   }
 }

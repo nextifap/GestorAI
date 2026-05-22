@@ -6,6 +6,7 @@ import { parse } from 'csv-parse';
 import { z } from 'zod';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 const MAX_CSV_ROWS = 1000;
 const MAX_TITLE_LENGTH = 255;
@@ -46,7 +47,7 @@ function hasCompatibleHeaders(firstRow) {
 export async function POST(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -55,7 +56,7 @@ export async function POST(request) {
     const formData = await request.formData();
     const file = formData.get('file');
     if (!file) {
-      return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
+      return errorResponse('IMPORT_FILE_MISSING');
     }
 
     const fileContent = await file.text();
@@ -70,19 +71,13 @@ export async function POST(request) {
     });
 
     if (tasks.length > MAX_CSV_ROWS) {
-      return NextResponse.json(
-        { error: `O arquivo excede o limite de ${MAX_CSV_ROWS} linhas.` },
-        { status: 400 },
-      );
+      return errorResponse('IMPORT_TOO_MANY_ROWS', {
+        message: `Arquivo muito grande. Limite de ${MAX_CSV_ROWS} linhas.`,
+      });
     }
 
     if (!hasCompatibleHeaders(tasks[0])) {
-      return NextResponse.json(
-        {
-          error: 'Cabeçalhos inválidos. Use "title" ou "Título da Tarefa" para o título da tarefa.',
-        },
-        { status: 400 },
-      );
+      return errorResponse('IMPORT_HEADERS_INVALID');
     }
 
     const invalidRows = [];
@@ -109,13 +104,9 @@ export async function POST(request) {
     });
 
     if (!newTasks.length) {
-      return NextResponse.json(
-        {
-          error: 'Nenhuma linha válida encontrada para importação.',
-          invalidRows,
-        },
-        { status: 400 },
-      );
+      return errorResponse('IMPORT_NO_VALID_ROWS', {
+        details: { invalidRows },
+      });
     }
 
     await prisma.task.createMany({
@@ -139,6 +130,6 @@ export async function POST(request) {
       message: 'Erro ao importar planilha.',
       context: { error, userId },
     });
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return errorResponse('INTERNAL_ERROR');
   }
 }

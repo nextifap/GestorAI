@@ -3,11 +3,12 @@ import prisma from '@/lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { toIsoDateOnly, parseIsoDateOnly, getDateBlockReason } from '@/lib/schedule';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -53,14 +54,14 @@ export async function GET(request) {
       context: { error, managerId },
     });
 
-    return NextResponse.json({ error: 'Erro ao listar solicitações.' }, { status: 500 });
+    return errorResponse('APPOINTMENTS_LIST_FAILED');
   }
 }
 
 export async function POST(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const requesterId = verificacao.usuario.id;
@@ -70,14 +71,14 @@ export async function POST(request) {
     const { managerId, date, hour, channel = 'web', justification = null } = body;
 
     if (!managerId || !date || typeof hour === 'undefined') {
-      return NextResponse.json({ error: 'managerId, date e hour são obrigatórios.' }, { status: 400 });
+      return errorResponse('APPOINTMENT_REQUEST_INVALID');
     }
 
     const parsedDate = parseIsoDateOnly(date);
     const parsedHour = Number(hour);
 
     if (!parsedDate || Number.isNaN(parsedHour) || parsedHour < 0 || parsedHour > 23) {
-      return NextResponse.json({ error: 'Data ou hora inválida.' }, { status: 400 });
+      return errorResponse('APPOINTMENT_DATE_OR_HOUR_INVALID');
     }
 
     // Verificar se o manager existe
@@ -86,22 +87,19 @@ export async function POST(request) {
     });
 
     if (!manager || manager.role !== 'gestor') {
-      return NextResponse.json(
-        { error: 'Manager não encontrado ou inválido.' },
-        { status: 404 }
-      );
+      return errorResponse('APPOINTMENT_MANAGER_NOT_FOUND');
     }
 
     // Verificar requester (quem faz a solicitação) não é gestor e não é o mesmo manager
     const requester = await prisma.usuario.findUnique({ where: { id: requesterId } });
     if (!requester) {
-      return NextResponse.json({ error: 'Solicitante não encontrado.' }, { status: 404 });
+      return errorResponse('APPOINTMENT_REQUESTER_NOT_FOUND');
     }
     if (requester.role === 'gestor') {
-      return NextResponse.json({ error: 'Gestores não podem solicitar agendamentos.' }, { status: 403 });
+      return errorResponse('APPOINTMENT_REQUEST_FORBIDDEN_MANAGER');
     }
     if (requester.id === managerId) {
-      return NextResponse.json({ error: 'Usuários não podem solicitar agendamentos a si mesmos.' }, { status: 403 });
+      return errorResponse('APPOINTMENT_REQUEST_FORBIDDEN_SELF');
     }
 
     // Verificar se já existe uma solicitação idêntica
@@ -115,16 +113,13 @@ export async function POST(request) {
     });
 
     if (existing) {
-      return NextResponse.json(
-        { error: 'Já existe uma solicitação para este horário.' },
-        { status: 409 }
-      );
+      return errorResponse('APPOINTMENT_DUPLICATE');
     }
 
     // Verificar regras de bloqueio de data (retroativo, fim de semana, feriado)
     const dateBlock = getDateBlockReason(parsedDate);
     if (dateBlock) {
-      return NextResponse.json({ error: dateBlock }, { status: 409 });
+      return errorResponse('APPOINTMENT_DATE_BLOCKED', { message: dateBlock });
     }
 
     // Verificar se já existe um slot ocupado (isAvailable = false) para esse horário
@@ -139,7 +134,7 @@ export async function POST(request) {
     });
 
     if (existingSlot) {
-      return NextResponse.json({ error: 'Horário indisponível no calendário do gestor.' }, { status: 409 });
+      return errorResponse('APPOINTMENT_SLOT_UNAVAILABLE');
     }
 
     const created = await prisma.appointmentRequest.create({
@@ -170,6 +165,6 @@ export async function POST(request) {
       context: { error, requesterId },
     });
 
-    return NextResponse.json({ error: 'Erro ao criar solicitação.' }, { status: 500 });
+    return errorResponse('APPOINTMENT_CREATE_FAILED');
   }
 }

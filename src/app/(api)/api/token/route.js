@@ -4,12 +4,13 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../lib/prisma'; // Importe a instância do Prisma Client
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 export async function POST(request) {
   // 1. Verifique o token antes de processar a requisição
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { title } = await request.json();
@@ -36,8 +37,6 @@ export async function POST(request) {
       message: 'Erro ao criar tarefa.',
       context: { error, userId: verificacao?.usuario?.id },
     });
-    return NextResponse.json({
-      error: 'Erro interno do servidor ao criar a tarefa.'
-    }, { status: 500 });
+    return errorResponse('TASK_CREATE_FAILED');
   }
 }

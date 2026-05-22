@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
 import { getAcademicContextForPrompt } from '@/lib/academicContext';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 import {
   parseAppointmentRequestFromText,
   parseIsoDateOnly,
@@ -139,10 +140,7 @@ async function resolveScheduleCommand({ userMessage, userId, conversation }) {
 
 // Rota GET para evitar erro 405
 export async function GET() {
-  return NextResponse.json(
-    { message: 'Rota de chat aceita apenas requisições POST.' }, 
-    { status: 405 }
-  );
+  return errorResponse('CHAT_METHOD_NOT_ALLOWED');
 }
 
 // Rota POST
@@ -153,7 +151,7 @@ export async function POST(req) {
   // Verifica JWT
   const verificacao = verifyRequestToken(req);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -167,18 +165,12 @@ export async function POST(req) {
     conversationId = body.conversationId;
     userMessage = body.userMessage || body.message;
   } catch (error) {
-    return NextResponse.json(
-      { message: 'Erro 400: O corpo da requisição não é um JSON válido.' },
-      { status: 400 }
-    );
+    return errorResponse('CHAT_BAD_JSON');
   }
 
   // Validação
   if (!conversationId || !userMessage) {
-    return NextResponse.json(
-      { message: 'Erro 400: Faltando conversationId ou userMessage/message.' },
-      { status: 400 }
-    );
+    return errorResponse('CHAT_MISSING_FIELDS');
   }
 
   try {
@@ -194,7 +186,7 @@ export async function POST(req) {
     });
 
     if (!conversation) {
-      return NextResponse.json({ message: 'Conversa não encontrada para este usuário.' }, { status: 404 });
+      return errorResponse('CHAT_CONVERSATION_NOT_FOUND');
     }
 
     // Salva mensagem do usuário
@@ -333,6 +325,6 @@ Responda sempre de forma prestativa, concisa e focada no contexto acadêmico e n
       message: 'Erro interno na rota de chat.',
       context: { error, conversationId, userId },
     });
-    return NextResponse.json({ message: 'Erro interno no servidor.' }, { status: 500 });
+    return errorResponse('CHAT_INTERNAL_ERROR');
   }
 }

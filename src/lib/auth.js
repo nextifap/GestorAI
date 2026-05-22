@@ -38,13 +38,13 @@ export function verifyRequestToken(request) {
   const token = getRequestToken(request);
 
   if (!token) {
-    return { error: 'Token não fornecido.', status: 401 };
+    return { error: 'Token não fornecido.', errorCode: 'AUTH_MISSING_TOKEN', status: 401 };
   }
 
   try {
     const usuario = jwt.verify(token, process.env.JWT_SECRET);
     return { usuario, status: 200 };
   } catch {
-    return { error: 'Token inválido.', status: 401 };
+    return { error: 'Token inválido.', errorCode: 'AUTH_INVALID_TOKEN', status: 401 };
   }
 }
