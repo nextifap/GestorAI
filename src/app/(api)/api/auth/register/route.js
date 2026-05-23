@@ -4,18 +4,19 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '../../../../../lib/prisma'; // Importe a instância do Prisma Client
 import { saveSystemLog } from '@/lib/systemLog';
+import { errorResponse } from '@/lib/apiErrors';
 
 export async function POST(request) {
   const { nomeCompleto, email, senha, repitaSenha } = await request.json();
 
   if (senha !== repitaSenha) {
-    return NextResponse.json({ error: 'As senhas não coincidem.' }, { status: 400 });
+    return errorResponse('AUTH_REGISTER_PASSWORD_MISMATCH');
   }
 
   // Verifica se o email já existe
   const usuarioExistente = await prisma.user.findUnique({ where: { email } });
   if (usuarioExistente) {
-    return NextResponse.json({ error: 'Este email já está em uso.' }, { status: 409 });
+    return errorResponse('AUTH_REGISTER_EMAIL_IN_USE');
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -49,6 +50,6 @@ export async function POST(request) {
       message: 'Erro ao cadastrar usuário.',
       context: { error },
     });
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return errorResponse('AUTH_REGISTER_FAILED');
   }
 }

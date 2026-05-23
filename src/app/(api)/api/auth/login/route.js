@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '../../../../../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { AUTH_COOKIE_NAME, authCookieOptions } from '@/lib/auth';
+import { errorResponse } from '@/lib/apiErrors';
 
 export async function POST(request) {
   const { email, senha } = await request.json();
@@ -10,17 +11,17 @@ export async function POST(request) {
   const usuario = await prisma.user.findUnique({ where: { email } });
 
   if (!usuario) {
-    return NextResponse.json({ error: 'Email ou senha inválidos.' }, { status: 401 });
+    return errorResponse('AUTH_LOGIN_INVALID');
   }
 
   if (!usuario.senha) {
-    return NextResponse.json({ error: 'Senha não cadastrada para este usuário.' }, { status: 500 });
+    return errorResponse('AUTH_LOGIN_PASSWORD_MISSING');
   }
 
   const senhasCoincidem = await bcrypt.compare(senha, usuario.senha);
 
   if (!senhasCoincidem) {
-    return NextResponse.json({ error: 'Email ou senha inválidos.' }, { status: 401 });
+    return errorResponse('AUTH_LOGIN_INVALID');
   }
 
   // Corrigido: Adicione o nomeCompleto ao payload do token

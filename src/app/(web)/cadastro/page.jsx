@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getApiErrorMessage } from '@/lib/apiClient';
 
 const capitalizeName = (name) => {
   if (!name) return '';
@@ -51,8 +52,10 @@ export default function CadastroPage() {
         }),
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Erro ao cadastrar usuário');
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, 'Erro ao cadastrar usuário');
+        throw new Error(message);
+      }
 
       setMessage('Usuário cadastrado com sucesso!');
       setMessageType('success');

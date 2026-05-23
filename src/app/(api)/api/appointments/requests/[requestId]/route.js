@@ -3,11 +3,12 @@ import prisma from '@/lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { getDateBlockReason, toIsoDateOnly } from '@/lib/schedule';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 export async function PATCH(request, { params }) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -17,18 +18,18 @@ export async function PATCH(request, { params }) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+    return errorResponse('JSON_INVALID');
   }
 
   const action = String(body?.action || '').trim().toLowerCase();
   const justification = String(body?.justification || '').trim();
 
   if (action !== 'approve' && action !== 'reject') {
-    return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
+    return errorResponse('APPOINTMENT_ACTION_INVALID');
   }
 
   if (action === 'reject' && !justification) {
-    return NextResponse.json({ error: 'Justificativa é obrigatória para recusa.' }, { status: 400 });
+    return errorResponse('APPOINTMENT_REJECT_REASON_REQUIRED');
   }
 
   try {
@@ -43,11 +44,11 @@ export async function PATCH(request, { params }) {
     });
 
     if (!appointmentRequest) {
-      return NextResponse.json({ error: 'Solicitação não encontrada.' }, { status: 404 });
+      return errorResponse('APPOINTMENT_NOT_FOUND');
     }
 
     if (appointmentRequest.status !== 'pending') {
-      return NextResponse.json({ error: 'Solicitação já foi processada.' }, { status: 409 });
+      return errorResponse('APPOINTMENT_ALREADY_PROCESSED');
     }
 
     if (action === 'reject') {
@@ -72,7 +73,7 @@ export async function PATCH(request, { params }) {
 
     const dateBlockReason = getDateBlockReason(appointmentRequest.requestedDate);
     if (dateBlockReason) {
-      return NextResponse.json({ error: dateBlockReason }, { status: 409 });
+      return errorResponse('APPOINTMENT_DATE_BLOCKED', { message: dateBlockReason });
     }
 
     const existingSlot = await prisma.managerScheduleSlot.findFirst({
@@ -88,10 +89,7 @@ export async function PATCH(request, { params }) {
     });
 
     if (existingSlot && !existingSlot.isAvailable) {
-      return NextResponse.json(
-        { error: 'Esse horário já está indisponível e não pode ser aprovado.' },
-        { status: 409 },
-      );
+      return errorResponse('APPOINTMENT_APPROVAL_CONFLICT');
     }
 
     const slot = await prisma.managerScheduleSlot.upsert({
@@ -138,6 +136,6 @@ export async function PATCH(request, { params }) {
       context: { error, managerId, requestId, action },
     });
 
-    return NextResponse.json({ error: 'Erro ao processar solicitação.' }, { status: 500 });
+    return errorResponse('APPOINTMENT_PROCESS_FAILED');
   }
 }

@@ -3,11 +3,12 @@ import prisma from '@/lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { validateScheduleInput, toIsoDateOnly } from '@/lib/schedule';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 export async function PATCH(request, { params }) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -17,7 +18,7 @@ export async function PATCH(request, { params }) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+    return errorResponse('JSON_INVALID');
   }
 
   try {
@@ -27,7 +28,7 @@ export async function PATCH(request, { params }) {
     });
 
     if (!existingSlot) {
-      return NextResponse.json({ error: 'Slot não encontrado.' }, { status: 404 });
+      return errorResponse('SCHEDULE_SLOT_NOT_FOUND');
     }
 
     const nextDate = body?.date || toIsoDateOnly(existingSlot.date);
@@ -35,7 +36,7 @@ export async function PATCH(request, { params }) {
     const validation = validateScheduleInput({ date: nextDate, hour: nextHour });
 
     if (!validation.ok) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return errorResponse('SCHEDULE_VALIDATION_ERROR', { message: validation.error });
     }
 
     const isAvailable = typeof body?.isAvailable === 'boolean' ? body.isAvailable : existingSlot.isAvailable;
@@ -51,7 +52,7 @@ export async function PATCH(request, { params }) {
     });
 
     if (collision) {
-      return NextResponse.json({ error: 'Já existe um slot nesse horário.' }, { status: 409 });
+      return errorResponse('SCHEDULE_SLOT_CONFLICT');
     }
 
     const updatedSlot = await prisma.managerScheduleSlot.update({
@@ -79,14 +80,14 @@ export async function PATCH(request, { params }) {
       context: { error, managerId, slotId },
     });
 
-    return NextResponse.json({ error: 'Erro ao atualizar slot.' }, { status: 500 });
+    return errorResponse('SCHEDULE_SLOT_UPDATE_FAILED');
   }
 }
 
 export async function DELETE(request, { params }) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: managerId } = verificacao.usuario;
@@ -99,7 +100,7 @@ export async function DELETE(request, { params }) {
     });
 
     if (!slot) {
-      return NextResponse.json({ error: 'Slot não encontrado.' }, { status: 404 });
+      return errorResponse('SCHEDULE_SLOT_NOT_FOUND');
     }
 
     const approvedCount = await prisma.appointmentRequest.count({
@@ -110,10 +111,7 @@ export async function DELETE(request, { params }) {
     });
 
     if (approvedCount > 0) {
-      return NextResponse.json(
-        { error: 'Não é possível excluir slot com agendamento aprovado.' },
-        { status: 409 },
-      );
+      return errorResponse('SCHEDULE_SLOT_DELETE_CONFLICT');
     }
 
     await prisma.managerScheduleSlot.delete({ where: { id: slotId } });
@@ -127,6 +125,6 @@ export async function DELETE(request, { params }) {
       context: { error, managerId, slotId },
     });
 
-    return NextResponse.json({ error: 'Erro ao excluir slot.' }, { status: 500 });
+    return errorResponse('SCHEDULE_SLOT_DELETE_FAILED');
   }
 }

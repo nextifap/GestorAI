@@ -5,10 +5,15 @@ import prisma from '../../../../lib/prisma';
 import { saveSystemLog } from '@/lib/systemLog';
 import { verifyRequestToken } from '@/lib/auth';
 import conversationService from '../../services/conversationService';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 // Rota GET para buscar o histórico de conversas
 export async function GET(request) {
   const verificacao = verifyRequestToken(request);
+  if (verificacao.status !== 200) {
+    return respondAuthError(verificacao);
+  }
+
   const params = request.nextUrl.searchParams;
   
   const { id: userId } = verificacao.usuario;
@@ -29,7 +34,7 @@ export async function GET(request) {
       message: 'Erro ao buscar histórico de conversas.',
       context: { error, userId },
     });
-    return NextResponse.json({ error: 'Erro ao buscar histórico.' }, { status: 500 });
+    return errorResponse('CONVERSATIONS_FETCH_FAILED');
   }
 }
 
@@ -37,7 +42,7 @@ export async function GET(request) {
 export async function POST(request) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -61,6 +66,6 @@ export async function POST(request) {
       message: 'Erro ao salvar conversa.',
       context: { error, userId },
     });
-    return NextResponse.json({ error: 'Erro ao salvar conversa.' }, { status: 500 });
+    return errorResponse('CONVERSATION_CREATE_FAILED');
   }
 }

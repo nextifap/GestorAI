@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import prisma from '../../../../../../lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 const ALLOWED_STATUS = new Set(['active', 'handover_pending', 'handover_in_progress', 'resolved']);
 
 export async function PATCH(request, { params }) {
   const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -18,14 +19,14 @@ export async function PATCH(request, { params }) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+    return errorResponse('JSON_INVALID');
   }
 
   const status = String(body?.status || '').trim();
   const handoverNote = body?.handoverNote ? String(body.handoverNote).trim() : null;
 
   if (!ALLOWED_STATUS.has(status)) {
-    return NextResponse.json({ error: 'Status inválido para handover.' }, { status: 400 });
+    return errorResponse('HANDOVER_STATUS_INVALID');
   }
 
   try {
@@ -35,7 +36,7 @@ export async function PATCH(request, { params }) {
     });
 
     if (!conversation) {
-      return NextResponse.json({ error: 'Conversa não encontrada.' }, { status: 404 });
+      return errorResponse('HANDOVER_NOT_FOUND');
     }
 
     const updatedConversation = await prisma.conversation.update({
@@ -57,6 +58,6 @@ export async function PATCH(request, { params }) {
       context: { error, userId, conversationId },
     });
 
-    return NextResponse.json({ error: 'Erro ao atualizar handover.' }, { status: 500 });
+    return errorResponse('HANDOVER_UPDATE_FAILED');
   }
 }

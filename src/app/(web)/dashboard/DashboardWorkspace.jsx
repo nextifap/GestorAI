@@ -15,6 +15,7 @@ import {
   validateScheduleInput,
 } from '@/lib/schedule';
 import { formatarData } from '@/lib/utils';
+import { getApiErrorMessage, readApiError } from '@/lib/apiClient';
 import SidebarInfo from './components/Sidebar';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
@@ -263,6 +264,9 @@ export default function DashboardWorkspace() {
         }
       } else if (response.status === 401) {
         router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar o histórico.');
+        setNotice(message);
       }
     } catch {
       // Mantém o estado atual.
@@ -274,9 +278,12 @@ export default function DashboardWorkspace() {
       const response = await fetch(`/api/contacts`, { method: 'GET' });
       if (response.ok) {
         const data = await response.json();
-        setConversations(data.conversations || []);
+        setContacts(data.contacts || []);
       } else if (response.status === 401) {
         router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar os contatos.');
+        setNotice(message);
       }
     } catch {
       // Mantém o estado atual.
@@ -291,6 +298,9 @@ export default function DashboardWorkspace() {
         setHandoverQueue(data.queue || []);
       } else if (response.status === 401) {
         router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar a fila de handover.');
+        setNotice(message);
       }
     } catch {
       // Mantém o estado atual.
@@ -305,6 +315,9 @@ export default function DashboardWorkspace() {
         setScheduleSlots(data.slots || []);
       } else if (response.status === 401) {
         router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar a agenda.');
+        setNotice(message);
       }
     } catch {
       // Mantém o estado atual.
@@ -319,6 +332,9 @@ export default function DashboardWorkspace() {
         setAppointmentRequests(data.requests || []);
       } else if (response.status === 401) {
         router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar as solicitações.');
+        setNotice(message);
       }
     } catch {
       // Mantém o estado atual.
@@ -381,8 +397,8 @@ export default function DashboardWorkspace() {
     }
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setNotice(data.error || 'Não foi possível salvar o slot.');
+      const message = await getApiErrorMessage(response, 'Não foi possível salvar o slot.');
+      setNotice(message);
       return;
     }
 
@@ -401,8 +417,8 @@ export default function DashboardWorkspace() {
     }
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setNotice(data.error || 'Não foi possível excluir o slot.');
+      const message = await getApiErrorMessage(response, 'Não foi possível excluir o slot.');
+      setNotice(message);
       return;
     }
 
@@ -423,8 +439,8 @@ export default function DashboardWorkspace() {
     }
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setNotice(data.error || 'Não foi possível atualizar o slot.');
+      const message = await getApiErrorMessage(response, 'Não foi possível atualizar o slot.');
+      setNotice(message);
       return;
     }
 
@@ -451,8 +467,8 @@ export default function DashboardWorkspace() {
     }
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setNotice(data.error || 'Não foi possível processar a solicitação.');
+      const message = await getApiErrorMessage(response, 'Não foi possível processar a solicitação.');
+      setNotice(message);
       return;
     }
 
@@ -479,7 +495,8 @@ export default function DashboardWorkspace() {
       }
 
       if (!response.ok) {
-        throw new Error('Não foi possível assumir a conversa.');
+        const message = await getApiErrorMessage(response, 'Não foi possível assumir a conversa.');
+        throw new Error(message);
       }
 
       await Promise.all([fetchHandoverQueue(), fetchConversations()]);
@@ -504,6 +521,12 @@ export default function DashboardWorkspace() {
 
       if (response.status === 401) {
         router.push('/login');
+        return null;
+      }
+
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, 'Não foi possível salvar a conversa.');
+        setNotice(message);
         return null;
       }
 
@@ -542,7 +565,15 @@ export default function DashboardWorkspace() {
         body: JSON.stringify({ message: newUserMessage.text, conversationId: convIdToUse }),
       });
 
-      if (!response.ok) throw new Error('Erro na comunicação.');
+      if (response.status === 401) {
+        router.push('/login');
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, 'Erro na comunicação.');
+        throw new Error(message);
+      }
 
       const result = await response.json();
       setChatHistory((prev) => [...prev, { sender: 'assistant', text: result.response, conversationId: convIdToUse }]);
@@ -563,6 +594,12 @@ export default function DashboardWorkspace() {
       const response = await fetch(`/api/chat/${id}`, { method: 'GET' });
       if (response.status === 401) {
         router.push('/login');
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar a conversa.');
+        setNotice(message);
         return;
       }
 
@@ -591,6 +628,17 @@ export default function DashboardWorkspace() {
       return;
     }
 
+    if (!response.ok) {
+      const apiError = await readApiError(response);
+      if (apiError?.details?.invalidRows?.length) {
+        setNotice(`${apiError.message} (${apiError.details.invalidRows.length} linha(s) com erro).`);
+        return;
+      }
+
+      setNotice(apiError?.message || 'Não foi possível importar a planilha.');
+      return;
+    }
+
     setNotice('Importado com sucesso.');
   };
 
@@ -599,6 +647,12 @@ export default function DashboardWorkspace() {
 
     if (response.status === 401) {
       router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível exportar as tarefas.');
+      setNotice(message);
       return;
     }
 
@@ -632,8 +686,6 @@ export default function DashboardWorkspace() {
   }
 
   useEffect(() => {
-    setContacts
-
     switch (activeTab) {
       case 'chat': fetchConversations(); break;
       case 'contacts': fetchContacts(); break;
