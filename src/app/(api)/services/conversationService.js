@@ -69,7 +69,7 @@ class ConversationService {
                     connect: { id: newConversation.id }
                 },
                 text: message.text,
-                sender: 'contact',
+                sender: 'user',
             },
         });
 

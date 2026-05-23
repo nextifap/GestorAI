@@ -25,7 +25,8 @@ export async function GET(request) {
   }
 
   try {
-    const conversations = await conversationService.getConversations(contactName, userId, newMessages);
+    const conversationInstance = new conversationService();
+    const conversations = await conversationInstance.getConversations(contactName, userId, newMessages);
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
     await saveSystemLog({

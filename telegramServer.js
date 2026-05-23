@@ -3,8 +3,8 @@ import "dotenv/config";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 import input from "input";
-import conversationService from "./src/app/(api)/services/conversationService.js";
 import ConversationService from "./src/app/(api)/services/conversationService.js";
+import checkAndProcessQueue from "./src/app/(api)/services/telegramQueue.js";
 
 const apiId = parseInt(process.env.TELEGRAM_API_ID, 10);
 const apiHash = process.env.TELEGRAM_API_HASH;
@@ -34,6 +34,11 @@ const client = new TelegramClient(
     phoneCode: async () => await input.text("Código recebido no Telegram: "),
     onError: (err) => console.log("Erro durante a autenticação:", err),
   });
+
+  // Executa a função a cada 5 segundos (5000 milissegundos)
+  setInterval(() => {
+    checkAndProcessQueue(client);
+  }, 5000);
 
   console.log("\n🎉 Logado com sucesso!");
   

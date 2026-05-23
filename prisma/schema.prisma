@@ -135,3 +135,13 @@ model SystemLog {
   @@index([createdAt])
   @@index([level])
 }
+
+model MessageQueue {
+  id         String   @id @default(uuid())
+  chatId     String   // Para quem enviar (ID do chat ou @username)
+  text       String   @db.Text // A mensagem que será enviada
+  status     String   @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
+  error      String?  @db.Text // Caso dê erro no envio, guarda o motivo aqui
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

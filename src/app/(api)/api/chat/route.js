@@ -144,6 +144,75 @@ export async function GET() {
 
 // Rota POST
 export async function POST(req) {
+  // Verifica JWT
+  const verificacao = verifyRequestToken(req);
+  if (verificacao.status !== 200) {
+    return respondAuthError(verificacao);
+  }
+
+  const { id: userId } = verificacao.usuario;
+
+  // Lê body
+  let conversationId, userMessage;
+  try {
+    const body = await req.json();
+
+    // Aceita ambos campos: message ou userMessage
+    conversationId = body.conversationId;
+    userMessage = body.userMessage || body.message;
+  } catch (error) {
+    return errorResponse('CHAT_BAD_JSON');
+  }
+
+  try {
+
+    var conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      select: {
+        id: true,
+        status: true,
+        telegramChatId: true,
+      },
+    });
+
+    if (!conversation) {
+      return errorResponse('CHAT_CONVERSATION_NOT_FOUND');
+    }
+
+    // Salva mensagem do usuário
+    await prisma.chatMessage.create({
+      data: {
+        conversationId,
+        text: userMessage,
+        sender: 'user',
+      },
+    });
+  } catch (error) {
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/chat',
+      message: 'Erro ao salvar mensagem do usuário.',
+      context: { error, conversationId, userId },
+    });
+    return errorResponse('CHAT_INTERNAL_ERROR');
+  }
+
+  // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
+  await prisma.messageQueue.create({
+    data: {
+      chatId: conversation.telegramChatId || null,
+      text: userMessage,
+    },
+  });
+
+  return NextResponse.json({ response: 'ok' }, { status: 200 });
+}
+
+// Rota POST
+export async function ANTIGO_POST(req) {
 
   // Verifica JWT
   const verificacao = verifyRequestToken(req);
