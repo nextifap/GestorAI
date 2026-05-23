@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import prisma from './../lib/prisma.js';
 
 let lastCleanupAt = 0;
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;

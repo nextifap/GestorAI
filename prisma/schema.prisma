@@ -42,7 +42,7 @@ model Task {
 model Contact {
   id        String  @id @default(uuid())
   name      String?  // e.g., "John Doe"
-  telephone String
+  telephone String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   conversations Conversation[]
@@ -66,6 +66,7 @@ model Conversation {
   triageReason  String?
   userId        String
   contactId     String?
+  telegramChatId        String?
   user          User          @relation(fields: [userId], references: [id])
   contact       Contact?      @relation(fields: [contactId], references: [id])
   newMessages   Boolean?
