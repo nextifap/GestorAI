@@ -68,7 +68,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { managerId, date, hour, channel = 'web', justification = null } = body;
+    const { managerId, date, hour, channel = 'web', justification = null, conversationId = null } = body;
 
     if (!managerId || !date || typeof hour === 'undefined') {
       return errorResponse('APPOINTMENT_REQUEST_INVALID');
@@ -146,6 +146,7 @@ export async function POST(request) {
         channel,
         justification,
         status: 'pending',
+        ...(conversationId ? { conversationId } : {}),
       },
     });
 

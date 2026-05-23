@@ -4,7 +4,7 @@ const receiveAMessage = (message) => {
     for (const client of clients) {
         try {
             client.enqueue(
-            `data: ${JSON.stringify(parametro)}\n\n`
+            `data: ${JSON.stringify(message)}\n\n`
             );
         } catch (err) {
             clients.delete(client);
@@ -18,4 +18,6 @@ const sendAMessage = (message) => {
     console.log("Enviando mensagem para o Telegram:", message);
 }
 
-export default {receiveAMessage, sendAMessage};
+const chatService = { receiveAMessage, sendAMessage };
+
+export default chatService;

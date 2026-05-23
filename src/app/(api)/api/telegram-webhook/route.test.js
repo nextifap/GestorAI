@@ -104,7 +104,12 @@ describe('telegram-webhook route', () => {
     const response = await POST(buildTelegramRequest({ secretHeader: 'secret-incorreto' }));
 
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: 'Não autorizado.' });
+    expect(response.body).toEqual({
+      error: {
+        code: 'TELEGRAM_UNAUTHORIZED',
+        message: 'Solicitacao nao autorizada.',
+      },
+    });
     expect(saveSystemLogMock).toHaveBeenCalledOnce();
     expect(saveSystemLogMock.mock.calls[0][0]).toMatchObject({
       level: 'WARN',

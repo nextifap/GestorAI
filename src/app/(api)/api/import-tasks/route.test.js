@@ -58,12 +58,21 @@ describe('import-tasks route', () => {
   });
 
   it('returns 401 when token is invalid', async () => {
-    verifyRequestTokenMock.mockReturnValue({ status: 401, error: 'Token inválido.' });
+    verifyRequestTokenMock.mockReturnValue({
+      status: 401,
+      error: 'Token inválido.',
+      errorCode: 'AUTH_INVALID_TOKEN',
+    });
 
     const response = await POST({});
 
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: 'Token inválido.' });
+    expect(response.body).toEqual({
+      error: {
+        code: 'AUTH_INVALID_TOKEN',
+        message: 'Sua sessao expirou ou e invalida. Faca login novamente.',
+      },
+    });
     expect(createManyMock).not.toHaveBeenCalled();
   });
 

@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import { saveSystemLog } from '@/lib/systemLog';
-import { verifyRequestToken } from '@/lib/auth';
+import { getRequestToken, verifyRequestToken } from '@/lib/auth';
 import { getAcademicContextForPrompt } from '@/lib/academicContext';
 import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 import {
@@ -64,44 +64,19 @@ async function resolveScheduleCommand({ userMessage, userId, conversation }) {
       return validation.error;
     }
 
-    const existingSlot = await prisma.managerScheduleSlot.findFirst({
-      where: {
-        managerId,
-        date: validation.date,
-        hour: validation.hour,
-      },
-      select: { isAvailable: true },
+    const appointmentResult = await createAppointmentRequest({
+      requestUrl: conversation.requestUrl,
+      authToken: conversation.authToken,
+      managerId,
+      date: validation.isoDate,
+      hour: validation.hour,
+      channel: conversation.channel || 'web',
+      conversationId: conversation.id,
     });
 
-    if (existingSlot && !existingSlot.isAvailable) {
-      return 'Esse horário não está disponível. Você pode pedir os horários livres para escolher outra opção.';
+    if (!appointmentResult.ok) {
+      return appointmentResult.message;
     }
-
-    const duplicatePending = await prisma.appointmentRequest.findFirst({
-      where: {
-        managerId,
-        requesterId: userId,
-        requestedDate: validation.date,
-        requestedHour: validation.hour,
-        status: 'pending',
-      },
-      select: { id: true },
-    });
-
-    if (duplicatePending) {
-      return 'Você já possui uma solicitação pendente para esse horário. Aguarde a aprovação do gestor.';
-    }
-
-    await prisma.appointmentRequest.create({
-      data: {
-        managerId,
-        requesterId: userId,
-        conversationId: conversation.id,
-        requestedDate: validation.date,
-        requestedHour: validation.hour,
-        channel: conversation.channel || 'web',
-      },
-    });
 
     return `Solicitação registrada para ${formatSlotPtBr(validation.date, validation.hour)}. O gestor precisa aprovar ou recusar esse pedido.`;
   }
@@ -137,6 +112,29 @@ async function resolveScheduleCommand({ userMessage, userId, conversation }) {
   return `Horários livres do gestor:\n${lines.join('\n')}`;
 }
 
+async function createAppointmentRequest({ requestUrl, authToken, managerId, date, hour, channel, conversationId }) {
+  if (!authToken) {
+    return { ok: false, message: 'Sua sessao expirou. Faca login novamente.' };
+  }
+
+  const response = await fetch(new URL('/api/appointments/requests', requestUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({ managerId, date, hour, channel, conversationId }),
+  });
+
+  if (response.ok) {
+    return { ok: true };
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  const message = payload?.error?.message || 'Nao foi possivel criar sua solicitacao. Tente novamente.';
+  return { ok: false, message };
+}
+
 // Rota GET para evitar erro 405
 export async function GET() {
   return errorResponse('CHAT_METHOD_NOT_ALLOWED');
@@ -152,6 +150,7 @@ export async function POST(req) {
   }
 
   const { id: userId } = verificacao.usuario;
+  const authToken = getRequestToken(req);
 
   // Lê body
   let conversationId, userMessage;
@@ -208,7 +207,11 @@ export async function POST(req) {
     const scheduleResponse = await resolveScheduleCommand({
       userMessage,
       userId,
-      conversation,
+      conversation: {
+        ...conversation,
+        authToken,
+        requestUrl: req.url,
+      },
     });
 
     if (scheduleResponse) {
