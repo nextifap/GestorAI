@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import prisma from './prisma.js';
 
 export async function resolveManagerUserId(fallbackUserId) {
   const managerUser = await prisma.user.findFirst({

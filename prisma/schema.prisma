@@ -42,7 +42,7 @@ model Task {
 model Contact {
   id        String  @id @default(uuid())
   name      String?  // e.g., "John Doe"
-  telephone String
+  telephone String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   conversations Conversation[]
@@ -66,6 +66,7 @@ model Conversation {
   triageReason  String?
   userId        String
   contactId     String?
+  telegramChatId        String?
   user          User          @relation(fields: [userId], references: [id])
   contact       Contact?      @relation(fields: [contactId], references: [id])
   newMessages   Boolean?
@@ -133,6 +134,16 @@ model SystemLog {
 
   @@index([createdAt])
   @@index([level])
+}
+
+model MessageQueue {
+  id         String   @id @default(uuid())
+  chatId     String   // Para quem enviar (ID do chat ou @username)
+  text       String   @db.Text // A mensagem que será enviada
+  status     String   @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
+  error      String?  @db.Text // Caso dê erro no envio, guarda o motivo aqui
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Models adicionados para suportar ingestão de metadados UniFAP

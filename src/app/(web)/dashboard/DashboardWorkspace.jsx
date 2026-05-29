@@ -210,14 +210,14 @@ export default function DashboardWorkspace() {
   const blockedSlotsCount = scheduleSlots.length - availableSlotsCount;
 
   const [poolingIntervalId, setPoolingIntervalId] = useState(false);
+  const [poolingMessagesIntervalId, setPoolingMessagesIntervalId] = useState(false);
 
   useEffect(() => {
     if (poolingIntervalId) clearInterval(poolingIntervalId);
 
     setPoolingIntervalId(setInterval(() => {
       fetchConversations(null, 'true');
-      console.log("Atualizando conversas... ", new Date().toLocaleTimeString());
-    }, 5000));
+    }, 15000));
   }, []);
 
   useEffect(() => {
@@ -253,8 +253,16 @@ export default function DashboardWorkspace() {
     checkAuth();
   }, [router]);
 
+  // Chat
   useEffect(() => {
+  if (poolingMessagesIntervalId) clearInterval(poolingMessagesIntervalId);
+
     if (chatEndRef.current && activeTab === 'chat') {
+
+      setPoolingMessagesIntervalId(setInterval(() => {
+        handleHistoryClick(currentConversationId);
+      }, 10000));
+
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatHistory, activeTab]);
