@@ -82,20 +82,20 @@ export async function POST(request) {
     }
 
     // Verificar se o manager existe
-    const manager = await prisma.usuario.findUnique({
+    const manager = await prisma.user.findUnique({
       where: { id: managerId },
     });
 
-    if (!manager || manager.role !== 'gestor') {
+    if (!manager || (manager.role && manager.role !== 'gestor')) {
       return errorResponse('APPOINTMENT_MANAGER_NOT_FOUND');
     }
 
     // Verificar requester (quem faz a solicitação) não é gestor e não é o mesmo manager
-    const requester = await prisma.usuario.findUnique({ where: { id: requesterId } });
+    const requester = await prisma.user.findUnique({ where: { id: requesterId } });
     if (!requester) {
       return errorResponse('APPOINTMENT_REQUESTER_NOT_FOUND');
     }
-    if (requester.role === 'gestor') {
+    if (requester.role && requester.role === 'gestor') {
       return errorResponse('APPOINTMENT_REQUEST_FORBIDDEN_MANAGER');
     }
     if (requester.id === managerId) {
@@ -117,23 +117,22 @@ export async function POST(request) {
     }
 
     // Verificar regras de bloqueio de data (retroativo, fim de semana, feriado)
-    const dateBlock = getDateBlockReason(parsedDate);
+    const dateBlock = getDateBlockReason(parsedDate, parsedHour);
     if (dateBlock) {
       return errorResponse('APPOINTMENT_DATE_BLOCKED', { message: dateBlock });
     }
 
-    // Verificar se já existe um slot ocupado (isAvailable = false) para esse horário
+    // Permite apenas horários previamente cadastrados e disponíveis
     const existingSlot = await prisma.managerScheduleSlot.findFirst({
       where: {
         managerId,
         date: parsedDate,
         hour: parsedHour,
-        isAvailable: false,
       },
-      select: { id: true },
+      select: { id: true, isAvailable: true },
     });
 
-    if (existingSlot) {
+    if (!existingSlot || !existingSlot.isAvailable) {
       return errorResponse('APPOINTMENT_SLOT_UNAVAILABLE');
     }
 

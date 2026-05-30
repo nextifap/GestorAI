@@ -151,8 +151,9 @@ class ConversationService {
             }
 
             const scheduleResponse = await resolveScheduleCommand({
-                message: body.text,
+                userMessage: body.text,
                 userId: user.id,
+                managerId: conversation.userId || user.id,
                 conversation,
             });
 
@@ -170,8 +171,8 @@ class ConversationService {
                     data: { updatedAt: new Date() },
                 });
 
-                // Responde aqui ....
-                return NextResponse.json({ response: scheduleResponse }, { status: 200 });
+                this.sendAssistantMessage(scheduleResponse, conversation);
+                return;
             }
 
             // Limita o contexto para as últimas 10 mensagens (Performance)

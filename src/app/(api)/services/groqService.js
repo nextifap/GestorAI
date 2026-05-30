@@ -38,21 +38,22 @@ function hasAppointmentRequestIntent(message) {
   ].some((term) => normalized.includes(term));
 }
 
-async function resolveScheduleCommand({ userMessage, userId, conversation }) {
-  const managerId = await resolveManagerUserId(userId);
+async function resolveScheduleCommand({ userMessage, userId, conversation, managerId: managerIdOverride = null }) {
+  const extracted = parseAppointmentRequestFromText(userMessage);
+  const hasDateTime = Boolean(extracted?.date && Number.isFinite(extracted?.hour));
   const wantsAvailability = hasAvailabilityIntent(userMessage);
-  const wantsAppointment = hasAppointmentRequestIntent(userMessage);
+  const wantsAppointment = hasAppointmentRequestIntent(userMessage) || hasDateTime;
 
   if (!wantsAvailability && !wantsAppointment) {
     return null;
   }
 
   if (wantsAppointment) {
-    const extracted = parseAppointmentRequestFromText(userMessage);
-
     if (!extracted) {
       return 'Para solicitar um agendamento, envie a data e a hora. Exemplo: 30/04/2026 às 16h.';
     }
+
+    const managerId = managerIdOverride || await resolveManagerUserId(userId);
 
     const validation = validateScheduleInput({ date: extracted.date, hour: extracted.hour });
     if (!validation.ok) {
@@ -65,10 +66,10 @@ async function resolveScheduleCommand({ userMessage, userId, conversation }) {
         date: validation.date,
         hour: validation.hour,
       },
-      select: { isAvailable: true },
+      select: { id: true, isAvailable: true },
     });
 
-    if (existingSlot && !existingSlot.isAvailable) {
+    if (!existingSlot || !existingSlot.isAvailable) {
       return 'Esse horário não está disponível. Você pode pedir os horários livres para escolher outra opção.';
     }
 
@@ -102,10 +103,11 @@ async function resolveScheduleCommand({ userMessage, userId, conversation }) {
   }
 
   let targetDate = null;
-  const extracted = parseAppointmentRequestFromText(userMessage);
   if (extracted?.date) {
     targetDate = parseIsoDateOnly(extracted.date);
   }
+
+  const managerId = managerIdOverride || await resolveManagerUserId(userId);
 
   const today = parseIsoDateOnly(toIsoDateOnly(new Date()));
   const whereDate = targetDate
