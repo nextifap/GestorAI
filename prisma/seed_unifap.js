@@ -1,10 +1,35 @@
 // seed_unifap.js
 // Script idempotente para garantir que os metadados da UniFAP estejam no banco.
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
   const name = 'Centro Universitário Paraíso (UniFAP)';
+
+  const adminEmail = 'admin';
+  const adminPassword = 'admin';
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+
+  if (!existingAdmin) {
+    const senhaHash = await bcrypt.hash(adminPassword, 10);
+    await prisma.user.create({
+      data: {
+        email: adminEmail,
+        senha: senhaHash,
+        nomeCompleto: 'Administrador',
+        role: 'admin',
+        mustChangeCredentials: true,
+      },
+    });
+    console.log('Admin user created:', adminEmail);
+  } else if (existingAdmin.role !== 'admin') {
+    await prisma.user.update({
+      where: { id: existingAdmin.id },
+      data: { role: 'admin' },
+    });
+    console.log('Admin user updated:', adminEmail);
+  }
 
   let inst = await prisma.institution.findFirst({ where: { name } });
   if (!inst) {
@@ -27,8 +52,8 @@ async function main() {
 
   // cursos básicos
   const cursos = [
-    { name: 'Análise e Desenvolvimento de Sistemas', code: 'ADS', degree: 'Tecnólogo', duration_semesters: 5, workload_hours: 2180 },
-    { name: 'Sistemas de Informação', code: 'SI', degree: 'Bacharelado', duration_semesters: 8, workload_hours: 3040 }
+    { name: 'Análise e Desenvolvimento de Sistemas', code: 'ADS', degree: 'Tecnólogo', durationSemesters: 5, workloadHours: 2180 },
+    { name: 'Sistemas de Informação', code: 'SI', degree: 'Bacharelado', durationSemesters: 8, workloadHours: 3040 }
   ];
 
   for (const course of cursos) {

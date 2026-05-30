@@ -20,14 +20,16 @@ import { getApiErrorMessage, readApiError } from '@/lib/apiClient';
 import SidebarInfo from './components/Sidebar';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
-const tabOptions = [
+const baseTabOptions = [
   { id: 'chat', label: 'Chat' },
   { id: 'agenda', label: 'Agenda' },
+  { id: 'events', label: 'Eventos' },
   { id: 'requests', label: 'Solicitações' },
   { id: 'contacts', label: 'Contatos' },
   { id: 'handover', label: 'Handover' },
   { id: 'history', label: 'Histórico' },
 ];
+const adminTabOptions = [{ id: 'users', label: 'Usuarios' }];
 const hideSidebarForTabs = ['chat'];
 const CONVERSATIONS_PER_PAGE = 8;
 
@@ -144,6 +146,25 @@ const formatCalendarCellTitle = (date, hour) => {
   return `${dateLabel} (${ddmm}) • ${String(hour).padStart(2, '0')}:00`;
 };
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toTimeInputValue = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const hours = String(parsed.getHours()).padStart(2, '0');
+  const minutes = String(parsed.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 const buildSlotsMap = (slots) => slots.reduce((acc, slot) => {
   const key = isoKey(slot.date);
   if (!acc[key]) acc[key] = {};
@@ -158,7 +179,7 @@ const buildRequestsMap = (requests) => requests.reduce((acc, request) => {
   return acc;
 }, {});
 
-function Modal({ open, title, subtitle, onClose, children }) {
+function Modal({ open, title, subtitle, onClose, children, dismissible = true }) {
   if (!open) return null;
 
   return (
@@ -169,9 +190,11 @@ function Modal({ open, title, subtitle, onClose, children }) {
             <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
             {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-200">
-            Fechar
-          </button>
+          {dismissible && (
+            <button onClick={onClose} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-200">
+              Fechar
+            </button>
+          )}
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -188,13 +211,36 @@ export default function DashboardWorkspace() {
   const [handoverQueue, setHandoverQueue] = useState([]);
   const [scheduleSlots, setScheduleSlots] = useState([]);
   const [appointmentRequests, setAppointmentRequests] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [users, setUsers] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
   const [notice, setNotice] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [slotModal, setSlotModal] = useState({ open: false, mode: 'create', slot: null, date: '', hour: scheduleLimits.startHour, isAvailable: true });
+  const [eventModal, setEventModal] = useState({ open: false, mode: 'create', event: null, title: '', description: '', date: '', time: '' });
   const [requestModal, setRequestModal] = useState({ open: false, request: null, justification: '' });
+  const [credentialModal, setCredentialModal] = useState({
+    open: false,
+    mandatory: false,
+    email: '',
+    senha: '',
+    repitaSenha: '',
+    loading: false,
+    message: '',
+    messageType: '',
+  });
+  const [userModal, setUserModal] = useState({
+    open: false,
+    mode: 'create',
+    user: null,
+    nomeCompleto: '',
+    email: '',
+    senha: '',
+    repitaSenha: '',
+    mustChangeCredentials: true,
+  });
   const [rejectReasonById, setRejectReasonById] = useState({});
   const [historyPage, setHistoryPage] = useState(1);
   const router = useRouter();
@@ -211,6 +257,13 @@ export default function DashboardWorkspace() {
 
   const [poolingIntervalId, setPoolingIntervalId] = useState(false);
   const [poolingMessagesIntervalId, setPoolingMessagesIntervalId] = useState(false);
+
+  const visibleTabs = useMemo(() => {
+    if (user?.role === 'admin') {
+      return [...baseTabOptions, ...adminTabOptions];
+    }
+    return baseTabOptions;
+  }, [user?.role]);
 
   useEffect(() => {
     if (poolingIntervalId) clearInterval(poolingIntervalId);
@@ -237,11 +290,25 @@ export default function DashboardWorkspace() {
 
         setUser(meData.user);
 
+        if (meData.user.mustChangeCredentials) {
+          setCredentialModal({
+            open: true,
+            mandatory: true,
+            email: meData.user.email || '',
+            senha: '',
+            repitaSenha: '',
+            loading: false,
+            message: '',
+            messageType: '',
+          });
+        }
+
         await Promise.all([
           fetchConversations(),
           fetchHandoverQueue(),
           fetchScheduleSlots(),
           fetchAppointmentRequests(),
+          fetchEvents(),
         ]);
 
         setLoading(false);
@@ -329,6 +396,23 @@ export default function DashboardWorkspace() {
     }
   }
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/users', { method: 'GET' });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users || []);
+      } else if (response.status === 401) {
+        router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar os usuários.');
+        setNotice(message);
+      }
+    } catch {
+      // Mantém o estado atual.
+    }
+  };
+
   const fetchHandoverQueue = async () => {
     try {
       const response = await fetch('/api/handover/queue', { method: 'GET' });
@@ -387,6 +471,23 @@ export default function DashboardWorkspace() {
     }
   };
 
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch('/api/events', { method: 'GET' });
+      if (response.ok) {
+        const data = await response.json();
+        setEvents(data.events || []);
+      } else if (response.status === 401) {
+        router.push('/login');
+      } else {
+        const message = await getApiErrorMessage(response, 'Não foi possível carregar os eventos.');
+        setNotice(message);
+      }
+    } catch {
+      // Mantém o estado atual.
+    }
+  };
+
   const openSlotModal = ({ mode, slot = null, date = '', hour = scheduleLimits.startHour, isAvailable = true }) => {
     setNotice('');
     setSlotModal({
@@ -400,6 +501,21 @@ export default function DashboardWorkspace() {
   };
 
   const closeSlotModal = () => setSlotModal({ open: false, mode: 'create', slot: null, date: '', hour: scheduleLimits.startHour, isAvailable: true });
+
+  const openEventModal = ({ mode, event = null } = {}) => {
+    setNotice('');
+    setEventModal({
+      open: true,
+      mode,
+      event,
+      title: event?.title || '',
+      description: event?.description || '',
+      date: toDateInputValue(event?.eventDate) || '',
+      time: toTimeInputValue(event?.eventDate) || '',
+    });
+  };
+
+  const closeEventModal = () => setEventModal({ open: false, mode: 'create', event: null, title: '', description: '', date: '', time: '' });
 
   const openRequestModal = (request) => {
     setNotice('');
@@ -494,6 +610,107 @@ export default function DashboardWorkspace() {
     await fetchScheduleSlots();
   };
 
+  const handleSaveEvent = async () => {
+    const title = String(eventModal.title || '').trim();
+    const description = String(eventModal.description || '').trim();
+    const date = eventModal.date;
+    const time = eventModal.time;
+
+    if (!title) {
+      setNotice('Informe o nome do evento.');
+      return;
+    }
+
+    if (!date || !time) {
+      setNotice('Informe data e horário para o evento.');
+      return;
+    }
+
+    const payload = {
+      title,
+      description: description || null,
+      date,
+      time,
+    };
+
+    const endpoint = eventModal.mode === 'edit' && eventModal.event ? `/api/events/${eventModal.event.id}` : '/api/events';
+    const method = eventModal.mode === 'edit' && eventModal.event ? 'PATCH' : 'POST';
+
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível salvar o evento.');
+      setNotice(message);
+      return;
+    }
+
+    closeEventModal();
+    await fetchEvents();
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    if (!eventId) return;
+    if (!window.confirm('Excluir este evento?')) return;
+
+    const response = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível excluir o evento.');
+      setNotice(message);
+      return;
+    }
+
+    closeEventModal();
+    await fetchEvents();
+  };
+
+  const handleImportEvents = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/events/import', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const apiError = await readApiError(response);
+      if (apiError?.details?.invalidRows?.length) {
+        setNotice(`${apiError.message} (${apiError.details.invalidRows.length} linha(s) com erro).`);
+        return;
+      }
+
+      setNotice(apiError?.message || 'Não foi possível importar a planilha.');
+      return;
+    }
+
+    setNotice('Eventos importados com sucesso.');
+    await fetchEvents();
+  };
+
   const handleDecisionRequest = async (requestId, action, justificationOverride = '') => {
     const justification = String(justificationOverride || requestModal.justification || rejectReasonById[requestId] || '').trim();
     if (action === 'reject' && !justification) {
@@ -550,6 +767,207 @@ export default function DashboardWorkspace() {
     } catch (error) {
       setNotice(error.message || 'Erro ao assumir conversa.');
     }
+  };
+
+  const openCredentialModal = (mandatory = false) => {
+    setCredentialModal({
+      open: true,
+      mandatory,
+      email: user?.email || '',
+      senha: '',
+      repitaSenha: '',
+      loading: false,
+      message: '',
+      messageType: '',
+    });
+  };
+
+  const closeCredentialModal = () => {
+    if (credentialModal.mandatory) return;
+    setCredentialModal({
+      open: false,
+      mandatory: false,
+      email: '',
+      senha: '',
+      repitaSenha: '',
+      loading: false,
+      message: '',
+      messageType: '',
+    });
+  };
+
+  const handleUpdateCredentials = async () => {
+    const email = String(credentialModal.email || '').trim();
+    const senha = String(credentialModal.senha || '').trim();
+    const repitaSenha = String(credentialModal.repitaSenha || '').trim();
+
+    if (!email || !senha || !repitaSenha) {
+      setCredentialModal((prev) => ({
+        ...prev,
+        message: 'Preencha todos os campos.',
+        messageType: 'error',
+      }));
+      return;
+    }
+
+    if (senha !== repitaSenha) {
+      setCredentialModal((prev) => ({
+        ...prev,
+        message: 'As senhas não coincidem.',
+        messageType: 'error',
+      }));
+      return;
+    }
+
+    setCredentialModal((prev) => ({ ...prev, loading: true, message: '' }));
+
+    const response = await fetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha, repitaSenha }),
+    });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível atualizar as credenciais.');
+      setCredentialModal((prev) => ({
+        ...prev,
+        loading: false,
+        message,
+        messageType: 'error',
+      }));
+      return;
+    }
+
+    const data = await response.json();
+    setUser(data.user);
+    setNotice('Credenciais atualizadas com sucesso.');
+    setCredentialModal({
+      open: false,
+      mandatory: false,
+      email: '',
+      senha: '',
+      repitaSenha: '',
+      loading: false,
+      message: '',
+      messageType: '',
+    });
+  };
+
+  const openUserModal = ({ mode, user: targetUser = null }) => {
+    setNotice('');
+    setUserModal({
+      open: true,
+      mode,
+      user: targetUser,
+      nomeCompleto: targetUser?.nomeCompleto || '',
+      email: targetUser?.email || '',
+      senha: '',
+      repitaSenha: '',
+      mustChangeCredentials: targetUser ? Boolean(targetUser.mustChangeCredentials) : true,
+    });
+  };
+
+  const closeUserModal = () => {
+    setUserModal({
+      open: false,
+      mode: 'create',
+      user: null,
+      nomeCompleto: '',
+      email: '',
+      senha: '',
+      repitaSenha: '',
+      mustChangeCredentials: true,
+    });
+  };
+
+  const handleSaveUser = async () => {
+    const nomeCompleto = capitalizeName(userModal.nomeCompleto);
+    const email = String(userModal.email || '').trim();
+    const senha = String(userModal.senha || '').trim();
+    const repitaSenha = String(userModal.repitaSenha || '').trim();
+
+    if (!nomeCompleto || !email) {
+      setNotice('Informe nome e e-mail para continuar.');
+      return;
+    }
+
+    if (userModal.mode === 'create' && (!senha || !repitaSenha)) {
+      setNotice('Informe a senha para o novo usuário.');
+      return;
+    }
+
+    if (senha || repitaSenha) {
+      if (!senha || !repitaSenha) {
+        setNotice('Informe a senha e a confirmação.');
+        return;
+      }
+
+      if (senha !== repitaSenha) {
+        setNotice('As senhas não coincidem.');
+        return;
+      }
+    }
+
+    const payload = {
+      nomeCompleto,
+      email,
+      mustChangeCredentials: userModal.mustChangeCredentials,
+    };
+
+    if (senha && repitaSenha) {
+      payload.senha = senha;
+      payload.repitaSenha = repitaSenha;
+    }
+
+    const endpoint = userModal.mode === 'edit' && userModal.user
+      ? `/api/users/${userModal.user.id}`
+      : '/api/users';
+    const method = userModal.mode === 'edit' && userModal.user ? 'PATCH' : 'POST';
+
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível salvar o usuário.');
+      setNotice(message);
+      return;
+    }
+
+    closeUserModal();
+    await fetchUsers();
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    if (!targetUser?.id) return;
+    if (!window.confirm('Excluir este usuário?')) return;
+
+    const response = await fetch(`/api/users/${targetUser.id}`, { method: 'DELETE' });
+
+    if (response.status === 401) {
+      router.push('/login');
+      return;
+    }
+
+    if (!response.ok) {
+      const message = await getApiErrorMessage(response, 'Não foi possível excluir o usuário.');
+      setNotice(message);
+      return;
+    }
+
+    await fetchUsers();
   };
 
   const handleLogout = async () => {
@@ -735,6 +1153,8 @@ export default function DashboardWorkspace() {
     switch (activeTab) {
       case 'chat': fetchConversations(); break;
       case 'contacts': fetchContacts(); break;
+      case 'events': fetchEvents(); break;
+      case 'users': fetchUsers(); break;
     }
   }, [activeTab]);
 
@@ -1116,16 +1536,109 @@ export default function DashboardWorkspace() {
     </div>
   );
 
+  const renderUsersPanel = () => (
+    <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Usuarios</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Controle de acesso</h2>
+          <p className="mt-1 text-sm text-slate-500">Cadastre novos usuários e gerencie quem pode acessar o painel.</p>
+        </div>
+        <button onClick={() => openUserModal({ mode: 'create' })} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Novo usuario</button>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {users.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            Nenhum usuário cadastrado.
+          </div>
+        )}
+        {users.map((item) => (
+          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm font-semibold text-slate-900">{item.nomeCompleto || item.email}</div>
+                  {item.role === 'admin' && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">Admin</span>
+                  )}
+                  {item.mustChangeCredentials && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Troca pendente</span>
+                  )}
+                </div>
+                <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{item.email}</div>
+              </div>
+              <div className="flex flex-row gap-2 md:flex-col">
+                <button onClick={() => openUserModal({ mode: 'edit', user: item })} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Editar</button>
+                {item.id !== user?.id && (
+                  <button onClick={() => handleDeleteUser(item)} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">Excluir</button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderEventsPanel = () => (
+    <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Eventos</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Agenda acadêmica</h2>
+          <p className="mt-1 text-sm text-slate-500">Cadastre eventos da faculdade e importe planilhas com data, horário e descrição.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => openEventModal({ mode: 'create' })} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Novo evento</button>
+          <button onClick={() => document.getElementById('events-file-input').click()} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Importar planilha</button>
+          <input type="file" id="events-file-input" className="hidden" onChange={handleImportEvents} accept=".csv" />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {events.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            Nenhum evento cadastrado ainda.
+          </div>
+        )}
+        {events.map((event) => (
+          <div key={event.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{event.title}</div>
+                <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{formatarData(event.eventDate)}</div>
+                <p className="mt-2 text-sm text-slate-600">{event.description || 'Sem descrição informada.'}</p>
+              </div>
+              <div className="flex flex-row gap-2 md:flex-col">
+                <button onClick={() => openEventModal({ mode: 'edit', event })} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Editar</button>
+                <button onClick={() => handleDeleteEvent(event.id)} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">Excluir</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        Colunas esperadas na planilha: nome, data, horário e descrição. Datas podem ser no formato YYYY-MM-DD ou DD/MM/YYYY.
+      </div>
+    </div>
+  );
+
   const renderActivePanel = () => {
     switch (activeTab) {
       case 'agenda':
         return renderAgendaPanel();
+      case 'events':
+        return renderEventsPanel();
       case 'requests':
         return renderRequestsPanel();
       case 'handover':
         return renderHandoverPanel();
       case 'history':
         return renderHistoryPanel();
+      case 'users':
+        return renderUsersPanel();
       case 'contacts':
         return renderContactsPanel();
       case 'chat':
@@ -1156,7 +1669,7 @@ export default function DashboardWorkspace() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef6ff_0%,_#f8fafc_40%,_#eef2ff_100%)] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 p-4 lg:p-6">
-        <header className="rounded-[30px] relative z-index-999 border border-white/80 bg-white/85 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+        <header className="relative z-40 overflow-visible rounded-[30px] border border-white/80 bg-white/85 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-200/60">
@@ -1170,7 +1683,7 @@ export default function DashboardWorkspace() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {tabOptions.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -1183,9 +1696,21 @@ export default function DashboardWorkspace() {
 
             <div className="relative flex items-center gap-2">
               <button onClick={() => setActiveTab('agenda')} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Agenda</button>
-              <button onClick={() => setMenuOpen((value) => !value)} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Menu</button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((value) => !value);
+                }}
+                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Menu
+              </button>
               {(menuOpen) && (
-                <div className="absolute right-0 top-14 z-9999 w-56 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_20px_60px_rgba(15,23,42,0.15)]" onClick={(event) => event.stopPropagation()}>
+                <div className="absolute right-0 top-14 z-50 w-56 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_20px_60px_rgba(15,23,42,0.15)]" onClick={(event) => event.stopPropagation()}>
+                  <button onClick={() => { openCredentialModal(false); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Atualizar acesso</button>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => { setActiveTab('users'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Usuários</button>
+                  )}
                   <button onClick={() => { handleExport(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Exportar tarefas</button>
                   <button onClick={() => { document.getElementById('file-input').click(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Importar tarefas</button>
                   <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50">Sair</button>
@@ -1221,6 +1746,113 @@ export default function DashboardWorkspace() {
           {!hideSidebar() && <SidebarInfo />}
         </main>
       </div>
+
+      <Modal
+        open={credentialModal.open}
+        title={credentialModal.mandatory ? 'Atualize seu acesso' : 'Atualizar acesso'}
+        subtitle={credentialModal.mandatory
+          ? 'Atualize seu e-mail e senha para continuar no painel.'
+          : 'Atualize e-mail e senha do usuário logado.'}
+        onClose={closeCredentialModal}
+        dismissible={!credentialModal.mandatory}
+      >
+        <div className="space-y-4">
+          {credentialModal.mandatory && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Para continuar, informe um novo e-mail e uma nova senha.
+            </div>
+          )}
+          <input
+            type="text"
+            placeholder="E-mail"
+            value={credentialModal.email}
+            onChange={(e) => setCredentialModal((prev) => ({ ...prev, email: e.target.value }))}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              type="password"
+              placeholder="Nova senha"
+              value={credentialModal.senha}
+              onChange={(e) => setCredentialModal((prev) => ({ ...prev, senha: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            />
+            <input
+              type="password"
+              placeholder="Confirmar senha"
+              value={credentialModal.repitaSenha}
+              onChange={(e) => setCredentialModal((prev) => ({ ...prev, repitaSenha: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            />
+          </div>
+          <button
+            onClick={handleUpdateCredentials}
+            disabled={credentialModal.loading}
+            className="rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {credentialModal.loading ? 'Salvando...' : 'Salvar credenciais'}
+          </button>
+          {credentialModal.message && (
+            <p className={`text-sm font-medium ${credentialModal.messageType === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
+              {credentialModal.message}
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={userModal.open}
+        title={userModal.mode === 'edit' ? 'Editar usuário' : 'Novo usuário'}
+        subtitle={userModal.mode === 'edit' ? 'Atualize os dados do usuário.' : 'Informe nome, e-mail e senha de acesso.'}
+        onClose={closeUserModal}
+      >
+        <div className="space-y-4">
+          <input
+            type="text"
+            placeholder="Nome completo"
+            value={userModal.nomeCompleto}
+            onChange={(e) => setUserModal((prev) => ({ ...prev, nomeCompleto: e.target.value }))}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+          />
+          <input
+            type="text"
+            placeholder="E-mail"
+            value={userModal.email}
+            onChange={(e) => setUserModal((prev) => ({ ...prev, email: e.target.value }))}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              type="password"
+              placeholder={userModal.mode === 'edit' ? 'Nova senha (opcional)' : 'Senha'}
+              value={userModal.senha}
+              onChange={(e) => setUserModal((prev) => ({ ...prev, senha: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            />
+            <input
+              type="password"
+              placeholder={userModal.mode === 'edit' ? 'Confirmar senha' : 'Confirmar senha'}
+              value={userModal.repitaSenha}
+              onChange={(e) => setUserModal((prev) => ({ ...prev, repitaSenha: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            />
+          </div>
+          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={userModal.mustChangeCredentials}
+              onChange={(e) => setUserModal((prev) => ({ ...prev, mustChangeCredentials: e.target.checked }))}
+              className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+            Exigir troca de credenciais no primeiro acesso
+          </label>
+          <div className="flex flex-col gap-2 md:flex-row">
+            <button onClick={handleSaveUser} className="rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800">
+              Salvar usuário
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={slotModal.open}
@@ -1282,6 +1914,69 @@ export default function DashboardWorkspace() {
             {slotModal.mode === 'edit' && slotModal.slot && (
               <button onClick={handleDeleteSlot} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 font-medium text-rose-700 transition hover:bg-rose-100">
                 Excluir slot
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={eventModal.open}
+        title={eventModal.mode === 'edit' ? 'Editar evento' : 'Cadastrar evento'}
+        subtitle={eventModal.mode === 'edit' ? 'Atualize os detalhes do evento.' : 'Informe nome, data, horário e descrição.'}
+        onClose={closeEventModal}
+      >
+        <div className="space-y-4">
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>Nome do evento</span>
+            <input
+              type="text"
+              value={eventModal.title}
+              onChange={(e) => setEventModal((prev) => ({ ...prev, title: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+              placeholder="Ex: Semana de Tecnologia"
+            />
+          </label>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-600">
+              <span>Data</span>
+              <input
+                type="date"
+                value={eventModal.date}
+                onChange={(e) => setEventModal((prev) => ({ ...prev, date: e.target.value }))}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-600">
+              <span>Horário</span>
+              <input
+                type="time"
+                value={eventModal.time}
+                onChange={(e) => setEventModal((prev) => ({ ...prev, time: e.target.value }))}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+              />
+            </label>
+          </div>
+
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>Descrição</span>
+            <textarea
+              rows={4}
+              value={eventModal.description}
+              onChange={(e) => setEventModal((prev) => ({ ...prev, description: e.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+              placeholder="Detalhes do evento"
+            />
+          </label>
+
+          <div className="flex flex-col gap-2 md:flex-row">
+            <button onClick={handleSaveEvent} className="rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800">
+              Salvar evento
+            </button>
+            {eventModal.mode === 'edit' && eventModal.event && (
+              <button onClick={() => handleDeleteEvent(eventModal.event.id)} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 font-medium text-rose-700 transition hover:bg-rose-100">
+                Excluir evento
               </button>
             )}
           </div>

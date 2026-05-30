@@ -1,6 +1,6 @@
 # GestorAI
 
-GestorAI e um assistente virtual de produtividade com interface web (Next.js), persistencia via Prisma/PostgreSQL (Supabase) e automacao conversacional com Groq + Telegram.
+GestorAI e um assistente virtual de produtividade com interface web (Next.js), persistencia via Prisma/SQLite (local) e automacao conversacional com Groq + Telegram.
 
 - Deploy: https://gestor-ai.vercel.app
 - Bot Telegram: https://t.me/GestoAI_Bot
@@ -10,7 +10,7 @@ GestorAI e um assistente virtual de produtividade com interface web (Next.js), p
 - Frontend: Next.js App Router (`src/app/(web)/*`)
 - Backend API: Route Handlers (`src/app/(api)/api/*`)
 - ORM: Prisma (`prisma/schema.prisma`)
-- Banco: PostgreSQL (Supabase)
+- Banco: SQLite (local)
 - IA: Groq (`src/app/(api)/api/chat/route.js` e triagem no webhook Telegram)
 - Autenticacao: JWT em cookie HttpOnly + validacao de assinatura no servidor
 
@@ -23,9 +23,8 @@ cp env.exemple .env
 ```
 
 ```env
-# Banco PostgreSQL
-DATABASE_URL="postgresql://<usuario>@<pooler_url>:6543/postgres?pgbouncer=true"
-DIRECT_URL="postgresql://<usuario>:<senha>@<db_host>:5432/postgres"
+# Banco SQLite (local)
+DATABASE_URL="file:./dev.db"
 
 # Seguranca
 JWT_SECRET="chave_jwt_longa_e_aleatoria"
@@ -45,10 +44,10 @@ TELEGRAM_WEBHOOK_SECRET="segredo_opcional_webhook"
 npm install
 ```
 
-2. Execute as migracoes do banco:
+2. Prepare o banco local:
 
 ```bash
-npx prisma migrate deploy
+npx prisma db push
 ```
 
 3. Rode em desenvolvimento:

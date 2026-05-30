@@ -39,6 +39,8 @@ export async function POST(request) {
         id: usuario.id,
         nomeCompleto: usuario.nomeCompleto,
         email: usuario.email,
+        role: usuario.role,
+        mustChangeCredentials: usuario.mustChangeCredentials,
       },
     },
     { status: 200 },

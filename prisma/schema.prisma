@@ -4,12 +4,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// MUDANÇA 1: Altera o provider para "postgresql"
-// MUDANÇA 2: Adiciona a directUrl para o Prisma Migrate funcionar no Supabase
+// Configuracao SQLite para desenvolvimento local
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") 
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -17,9 +15,12 @@ model User {
   email           String         @unique
   senha           String
   nomeCompleto    String
+  role            String         @default("user")
+  mustChangeCredentials Boolean  @default(false)
   telegramId      String?        @unique @map("telegram_id")
 
   tasks           Task[]
+  events          CampusEvent[]
   conversations   Conversation[]
   scheduleSlots   ManagerScheduleSlot[]
   contacts        Contact[]
@@ -37,6 +38,20 @@ model Task {
   updatedAt     DateTime  @updatedAt
   userId        String
   user          User      @relation(fields: [userId], references: [id])
+}
+
+model CampusEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  eventDate   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([eventDate])
+  @@index([userId, eventDate])
 }
 
 model Contact {
@@ -139,9 +154,9 @@ model SystemLog {
 model MessageQueue {
   id         String   @id @default(uuid())
   chatId     String   // Para quem enviar (ID do chat ou @username)
-  text       String   @db.Text // A mensagem que será enviada
+  text       String   // A mensagem que será enviada
   status     String   @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
-  error      String?  @db.Text // Caso dê erro no envio, guarda o motivo aqui
+  error      String?  // Caso dê erro no envio, guarda o motivo aqui
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -224,7 +239,7 @@ model FacultyMember {
 model RagMetadata {
   id          String   @id @default(uuid())
   source      String
-  tags        String[]
+  tags        Json?
   version     String?
   language    String?
   lastUpdated DateTime? @map("last_updated")

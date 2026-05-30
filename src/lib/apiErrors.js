@@ -49,6 +49,50 @@ const ERROR_DEFINITIONS = {
     status: 400,
     message: 'Nenhuma linha valida encontrada. Revise a planilha.',
   },
+  EVENT_IMPORT_FILE_MISSING: {
+    status: 400,
+    message: 'Envie um arquivo de eventos para importar.',
+  },
+  EVENT_IMPORT_TOO_MANY_ROWS: {
+    status: 400,
+    message: 'Arquivo muito grande. Limite de 1000 linhas.',
+  },
+  EVENT_IMPORT_HEADERS_INVALID: {
+    status: 400,
+    message: 'A planilha precisa das colunas de nome, data e horario.',
+  },
+  EVENT_IMPORT_NO_VALID_ROWS: {
+    status: 400,
+    message: 'Nenhuma linha valida encontrada. Revise a planilha.',
+  },
+  EVENT_IMPORT_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel importar a planilha de eventos.',
+  },
+  EVENTS_FETCH_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel carregar os eventos.',
+  },
+  EVENT_VALIDATION_FAILED: {
+    status: 400,
+    message: 'Dados do evento invalidos. Verifique e tente novamente.',
+  },
+  EVENT_CREATE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel criar o evento.',
+  },
+  EVENT_NOT_FOUND: {
+    status: 404,
+    message: 'Evento nao encontrado. Atualize e tente novamente.',
+  },
+  EVENT_UPDATE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel atualizar o evento.',
+  },
+  EVENT_DELETE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel excluir o evento.',
+  },
   TASK_CREATE_FAILED: {
     status: 500,
     message: 'Nao foi possivel criar a tarefa. Tente novamente.',
@@ -221,6 +265,22 @@ const ERROR_DEFINITIONS = {
     status: 500,
     message: 'Este usuario nao possui senha cadastrada. Tente recuperar a conta.',
   },
+  AUTH_FORBIDDEN: {
+    status: 403,
+    message: 'Voce nao tem permissao para esta acao.',
+  },
+  AUTH_USER_NOT_FOUND: {
+    status: 401,
+    message: 'Usuario nao encontrado. Faca login novamente.',
+  },
+  AUTH_CREDENTIALS_REQUIRED: {
+    status: 400,
+    message: 'Informe email e senha para continuar.',
+  },
+  AUTH_REGISTER_DISABLED: {
+    status: 403,
+    message: 'Cadastro desativado. Procure o administrador.',
+  },
   AUTH_REGISTER_PASSWORD_MISMATCH: {
     status: 400,
     message: 'As senhas informadas nao sao iguais.',
@@ -232,6 +292,26 @@ const ERROR_DEFINITIONS = {
   AUTH_REGISTER_FAILED: {
     status: 500,
     message: 'Algo deu errado. Tente novamente.',
+  },
+  USERS_LIST_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel carregar os usuarios.',
+  },
+  USERS_CREATE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel criar o usuario.',
+  },
+  USERS_UPDATE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel atualizar o usuario.',
+  },
+  USERS_DELETE_FAILED: {
+    status: 500,
+    message: 'Nao foi possivel excluir o usuario.',
+  },
+  USER_SELF_DELETE_FORBIDDEN: {
+    status: 403,
+    message: 'Voce nao pode excluir seu proprio usuario.',
   },
 };
 

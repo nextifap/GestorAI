@@ -75,10 +75,17 @@ describe('middleware routing stability', () => {
   });
 
   it('allows unauthenticated access to public routes', async () => {
-    const response = await middleware(buildRequest({ pathname: '/cadastro' }));
+    const response = await middleware(buildRequest({ pathname: '/login' }));
 
     expect(nextMock).toHaveBeenCalledOnce();
     expect(response).toEqual({ type: 'next' });
+  });
+
+  it('redirects unauthenticated user from disabled cadastro route', async () => {
+    const response = await middleware(buildRequest({ pathname: '/cadastro' }));
+
+    expect(redirectMock).toHaveBeenCalledOnce();
+    expect(response.url).toBe('http://localhost/login');
   });
 
   it('returns 401 json for unauthenticated private api route', async () => {

@@ -86,8 +86,8 @@ export default function LoginPage() {
             {!loading ? (
               <form onSubmit={handleSubmit} className="mt-8 space-y-4">
                 <input
-                  type="email"
-                  placeholder="Digite seu e-mail"
+                  type="text"
+                  placeholder="Digite seu usuario ou e-mail"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
@@ -110,13 +110,6 @@ export default function LoginPage() {
                   </p>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => router.push('/cadastro')}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  Criar conta
-                </button>
               </form>
             ) : (
               <div className="mt-8 flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 py-12">
