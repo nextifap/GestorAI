@@ -9,6 +9,7 @@ import {
 import prisma from './../../../lib/prisma.js';
 import { resolveManagerUserId } from './../../../lib/manager.js';
 import Groq from "groq-sdk";
+import agendar from "./agendarService.js";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY?.trim(),
@@ -38,78 +39,83 @@ function hasAppointmentRequestIntent(message) {
   ].some((term) => normalized.includes(term));
 }
 
-async function resolveScheduleCommand({ userMessage, userId, conversation, managerId: managerIdOverride = null }) {
-  const extracted = parseAppointmentRequestFromText(userMessage);
-  const hasDateTime = Boolean(extracted?.date && Number.isFinite(extracted?.hour));
-  const wantsAvailability = hasAvailabilityIntent(userMessage);
-  const wantsAppointment = hasAppointmentRequestIntent(userMessage) || hasDateTime;
+async function resolveScheduleCommand(
+  agendamento,
+  userId,
+  conversation
+) {
 
+  const hasDateTime = Boolean(agendamento?.date && Number.isFinite(agendamento?.hour));
+  const wantsAvailability = agendamento.isAvailabilityQuery;
+  const wantsAppointment = agendamento.isAppointmentRequest || hasDateTime;
+
+  console.log("KAIO - 0", wantsAvailability, wantsAppointment, agendamento);
   if (!wantsAvailability && !wantsAppointment) {
-    return null;
+    return { status: false, message: null };
   }
+  console.log("KAIO - 1", agendamento);
 
+  /**
+   * =========================
+   * CREATE APPOINTMENT FLOW
+   * =========================
+   */
   if (wantsAppointment) {
-    if (!extracted) {
-      return 'Para solicitar um agendamento, envie a data e a hora. Exemplo: 30/04/2026 às 16h.';
-    }
 
-    const managerId = managerIdOverride || await resolveManagerUserId(userId);
+    const managerId = await resolveManagerUserId(userId);
 
-    const validation = validateScheduleInput({ date: extracted.date, hour: extracted.hour });
+    const validation = validateScheduleInput({
+      date: agendamento.date,
+      hour: agendamento.hour,
+    });
+
     if (!validation.ok) {
-      return validation.error;
+      return { status: false, message: validation.error };
     }
 
-    const existingSlot = await prisma.managerScheduleSlot.findFirst({
-      where: {
-        managerId,
-        date: validation.date,
-        hour: validation.hour,
-      },
-      select: { id: true, isAvailable: true },
+    const appointmentResult = await agendar(userId, {
+      requestUrl: conversation.requestUrl,
+      authToken: conversation.authToken,
+      managerId: managerId,
+      date: validation.isoDate,
+      hour: validation.hour,
+      channel: conversation.channel || 'web',
+      conversationId: conversation.id,
     });
 
-    if (!existingSlot || !existingSlot.isAvailable) {
-      return 'Esse horário não está disponível. Você pode pedir os horários livres para escolher outra opção.';
+    console.log("CAIO>>>", appointmentResult)
+
+    if (!appointmentResult.ok) {
+      return {   
+        status: false,
+        message: appointmentResult.message };
     }
 
-    const duplicatePending = await prisma.appointmentRequest.findFirst({
-      where: {
-        managerId,
-        requesterId: userId,
-        requestedDate: validation.date,
-        requestedHour: validation.hour,
-        status: 'pending',
-      },
-      select: { id: true },
-    });
-
-    if (duplicatePending) {
-      return 'Você já possui uma solicitação pendente para esse horário. Aguarde a aprovação do gestor.';
-    }
-
-    await prisma.appointmentRequest.create({
-      data: {
-        managerId,
-        requesterId: userId,
-        conversationId: conversation.id,
-        requestedDate: validation.date,
-        requestedHour: validation.hour,
-        channel: conversation.channel || 'web',
-      },
-    });
-
-    return `Solicitação registrada para ${formatSlotPtBr(validation.date, validation.hour)}. O gestor precisa aprovar ou recusar esse pedido.`;
+    return {
+      status: true,
+      message: `Solicitação registrada para ${formatSlotPtBr(
+        validation.date,
+        validation.hour
+      )}. O gestor precisa aprovar ou recusar esse pedido.`,
+    };
   }
+
+  /**
+   * =========================
+   * AVAILABILITY FLOW
+   * =========================
+   */
 
   let targetDate = null;
-  if (extracted?.date) {
-    targetDate = parseIsoDateOnly(extracted.date);
+
+  if (agendamento?.date) {
+    targetDate = parseIsoDateOnly(agendamento.date);
   }
 
-  const managerId = managerIdOverride || await resolveManagerUserId(userId);
+  const managerId = await resolveManagerUserId(userId);
 
   const today = parseIsoDateOnly(toIsoDateOnly(new Date()));
+
   const whereDate = targetDate
     ? { equals: targetDate }
     : { gte: today };
@@ -125,13 +131,22 @@ async function resolveScheduleCommand({ userMessage, userId, conversation, manag
   });
 
   if (!slots.length) {
-    return targetDate
-      ? 'Não encontrei horários livres nessa data.'
-      : 'No momento não há horários livres cadastrados na agenda do gestor.';
+    return {
+      status: false,
+      message: targetDate
+        ? 'Não encontrei horários livres nessa data.'
+        : 'No momento não há horários livres cadastrados na agenda do gestor.',
+    };
   }
 
-  const lines = slots.map((slot) => `- ${formatSlotPtBr(slot.date, slot.hour)}`);
-  return `Horários livres do gestor:\n${lines.join('\n')}`;
+  const lines = slots.map(
+    (slot) => `- ${formatSlotPtBr(slot.date, slot.hour)}`
+  );
+
+  return {
+    status: true,
+    message: `Horários livres do gestor:\n${lines.join('\n')}`,
+  };
 }
 
 export default {

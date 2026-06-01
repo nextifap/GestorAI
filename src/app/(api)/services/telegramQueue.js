@@ -1,9 +1,11 @@
 import prisma from './../../../lib/prisma.js';
 
 async function checkAndProcessQueue(client) {
+  var nextMessage = null;
+
   try {
     // 1. Busca a mensagem PENDING mais antiga da fila
-    const nextMessage = await prisma.messageQueue.findFirst({
+    nextMessage = await prisma.messageQueue.findFirst({
       where: { status: "PENDING" },
       orderBy: { createdAt: "asc" }, // Garante a ordem de chegada (FIFO)
     });
