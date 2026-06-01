@@ -54,5 +54,5 @@ export async function middleware(req) {
 
 // Matcher que ignora apenas arquivos estáticos
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|vercel.svg|window.svg).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|notification.wav|logo.png|vercel.svg|window.svg).*)'],
 };
