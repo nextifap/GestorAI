@@ -51,12 +51,30 @@ export async function PATCH(request, { params }) {
       return errorResponse('APPOINTMENT_ALREADY_PROCESSED');
     }
 
+    var rejected;
     if (action === 'reject') {
-      const rejected = await prisma.appointmentRequest.update({
+      rejected = await prisma.appointmentRequest.update({
         where: { id: requestId },
         data: {
           status: 'rejected',
           justification,
+        },
+        select: {
+          id: true,
+          status: true,
+          conversation: {
+            select: {
+              telegramChatId: true,
+            },
+          },
+        }
+      });
+
+      // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
+      await prisma.messageQueue.create({
+        data: {
+          chatId: rejected.conversation.telegramChatId || null,
+          text: "Sua solicitação de agendamento foi recusada pelo gestor. Justificativa: " + justification,
         },
       });
 
@@ -117,6 +135,23 @@ export async function PATCH(request, { params }) {
         status: 'approved',
         managerSlotId: slot.id,
         justification: null,
+      },
+      select: {
+          id: true,
+          status: true,
+          conversation: {
+            select: {
+              telegramChatId: true,
+            },
+          },
+        }
+    });
+
+    // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
+    await prisma.messageQueue.create({
+      data: {
+        chatId: approved.conversation.telegramChatId || null,
+        text: "Sua solicitação de agendamento foi aprovada pelo gestor.",
       },
     });
 
