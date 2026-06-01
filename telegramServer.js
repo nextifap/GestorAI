@@ -25,7 +25,7 @@ const client = new TelegramClient(
   }
 );
 
-(async () => {
+const startServer = async () => {
   console.log("Iniciando cliente do Telegram...");
   
   await client.start({
@@ -57,8 +57,7 @@ const client = new TelegramClient(
 
     try {
       // 1. Busca os detalhes do remetente usando o ID dele
-      const sender = await client.getEntity(message.senderId);
-
+      const sender = await message.getSender();
       // 2. Extrai o nome (considerando que usuários têm firstName/lastName e canais/grupos têm title)
       const nome = sender.firstName 
         ? `${sender.firstName} ${sender.lastName || ""}`.trim() 
@@ -92,4 +91,6 @@ const client = new TelegramClient(
 
   client.addEventHandler(eventHandler, new NewMessage({ incoming: true }));
 
-})();
+};
+
+export { startServer };
