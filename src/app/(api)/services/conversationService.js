@@ -107,7 +107,7 @@ class ConversationService {
             });
 
             // 1. Tenta buscar uma conversa existente para esse contato
-            let conversation = await prisma.conversation.findFirst({
+            var conversation = await prisma.conversation.findFirst({
                 where: {
                     contactId: contact.id,
                 }
@@ -121,6 +121,7 @@ class ConversationService {
                     data: {
                         summary: body.text.substring(0, 100),
                         telegramChatId: body.chatId,
+                        newMessages: true,
                         user: {
                             connect: { id: user.id }
                         },
@@ -128,6 +129,11 @@ class ConversationService {
                             connect: { id: contact.id }
                         }
                     }
+                });
+            } else {
+                conversation = await prisma.conversation.update({
+                    where: { id: conversation.id },
+                    data: { newMessages: true }
                 });
             }
 
@@ -147,21 +153,21 @@ class ConversationService {
             });
 
             if (conversation.status === 'handover_pending' || conversation.status === 'handover_in_progress') {
-                this.sendAssistantMessage('Seu atendimento está em revisão manual pelo coordenador. Retornaremos em breve.', conversation);
+                this.sendAssistantMessage('Seu atendimento está em revisão manual pelo coordenador. Retornaremos em breve.', conversation, 'assistant');
             }
 
-            const scheduleResponse = await resolveScheduleCommand({
-                userMessage: body.text,
-                userId: user.id,
-                managerId: conversation.userId || user.id,
+            const agendamento = await this.getDateAgendamento(body.text);
+            const scheduleResponse = await resolveScheduleCommand(
+                agendamento,
+                user.id,
                 conversation,
-            });
+            );
 
-            if (scheduleResponse) {
+            if (scheduleResponse?.message) {
                 await prisma.chatMessage.create({
                     data: {
                     conversationId: conversation.id,
-                    text: scheduleResponse,
+                    text: scheduleResponse?.message,
                     sender: 'assistant',
                     },
                 });
@@ -171,7 +177,7 @@ class ConversationService {
                     data: { updatedAt: new Date() },
                 });
 
-                this.sendAssistantMessage(scheduleResponse, conversation);
+                this.sendAssistantMessage(scheduleResponse?.message, conversation, 'assistant');
                 return;
             }
 
@@ -244,7 +250,12 @@ class ConversationService {
                 content: systemPromptContent,
             });
 
-            // --- FIM CORREÇÃO ---
+            if (scheduleResponse?.message) {
+                chatMessages.push({
+                    role: 'assistant',
+                    content: scheduleResponse.message,
+                });
+            }
 
             // Chamada Groq
             const chatCompletion = await groq.chat.completions.create({
@@ -263,7 +274,7 @@ class ConversationService {
                 },
             });
 
-            return this.sendAssistantMessage(assistantResponse, conversation);
+            return this.sendAssistantMessage(assistantResponse, conversation, 'assistant');
 
         } catch (error) {
             console.warn('Erro ao processar mensagem do Telegram:', error);
@@ -276,11 +287,13 @@ class ConversationService {
         }
     }
 
-    async sendAssistantMessage(message, conversation) {
+    async sendAssistantMessage(message, conversation, sender = 'assistant') {
         if (!this.client || !conversation.telegramChatId) {
             console.warn('Cliente Telegram não configurado. Impossível enviar mensagem.');
             return;
         }
+
+        message = `Assistente disse: ${message}`;
 
         this.client.sendMessage(conversation.telegramChatId, { 
             message: message
@@ -326,7 +339,85 @@ class ConversationService {
             take: 50,
         });
 
+        await prisma.conversation.updateMany({
+            where: {
+                id: {
+                    in: conversations.filter(c => c.newMessages).map(c => c.id)
+                }
+            },
+            data: {
+                newMessages: false
+            }
+        });
+
         return conversations
+    }
+
+    async getDateAgendamento(text) {
+        const response = await groq.chat.completions.create({
+                model: 'openai/gpt-oss-20b',
+                temperature: 0,
+                messages: [
+                    {
+                    role: 'system',
+                    content: `
+                Analise a mensagem do usuário.
+
+                Retorne APENAS JSON válido.
+
+                Formato:
+
+                {
+                "isAvailabilityQuery": boolean,
+                "isAppointmentRequest": boolean,
+                "date": "YYYY-MM-DD" | null,
+                "hour": number | null,
+                "minute": number | null
+                }
+
+                Defina isAvailabilityQuery=true quando o usuário estiver consultando disponibilidade, agenda ou horários livres.
+
+                Exemplos:
+                - "quais horários livres você tem?"
+                - "tem agenda amanhã?"
+                - "está disponível sexta?"
+                - "quais horários estão vagos?"
+
+                Defina isAppointmentRequest=true quando o usuário quiser marcar um compromisso.
+
+                Considere expressões como:
+                - agendar
+                - agendamento
+                - solicitar agendamento
+                - marcar horário
+                - marcar horario
+                - marcar reunião
+                - marcar reuniao
+                - reservar horário
+                - reservar horario
+                - criar agendamento
+
+                Exemplos:
+                - "quero agendar para amanhã às 14h"
+                - "marque uma reunião dia 15/06 às 14:30"
+                - "preciso de um horário na sexta"
+
+                Se não houver data ou horário identificável, retorne null.
+                Responda somente com JSON.
+                `,
+                },
+                {
+                    role: 'user',
+                    content: text,
+                },
+            ],
+        });
+
+        try {
+            return JSON.parse(response.choices[0]?.message?.content)
+        } catch {
+            return {};
+        }
     }
 }
 
