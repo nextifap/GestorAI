@@ -327,7 +327,7 @@ export default function DashboardWorkspace() {
     if (chatEndRef.current && activeTab === 'chat') {
 
       setPoolingMessagesIntervalId(setInterval(() => {
-        handleHistoryClick(currentConversationId);
+        handleHistoryClick(currentConversationId, true);
       }, 10000));
 
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -349,6 +349,9 @@ export default function DashboardWorkspace() {
       if (response.ok) {
         const data = await response.json();
         if (newMessages === 'true') { 
+
+            if (data?.conversations?.length > 0) playNotification();
+
             data?.conversations?.forEach((conv) => {
               if (data.conversations.filter((c) => c.id == conv.id).length === 0) { 
                 data.conversations.push(conv);
@@ -1003,6 +1006,7 @@ export default function DashboardWorkspace() {
   };
 
   const handleSendMessage = async () => {
+
     if (!currentMessage.trim()) return;
 
     let convIdToUse = currentConversationId;
@@ -1040,7 +1044,7 @@ export default function DashboardWorkspace() {
       }
 
       const result = await response.json();
-      setChatHistory((prev) => [...prev, { sender: 'assistant', text: result.response, conversationId: convIdToUse }]);
+      // setChatHistory((prev) => [...prev, { sender: 'assistant', createdAt: result.createdAt, text: result.response, conversationId: convIdToUse }]);
     } catch (error) {
       setNotice('Erro: ' + error.message);
     }
@@ -1053,9 +1057,9 @@ export default function DashboardWorkspace() {
     setActiveTab('chat');
   };
 
-  const handleHistoryClick = async (id) => {
+  const handleHistoryClick = async (id, isPooling = false) => {
     try {
-      const response = await fetch(`/api/chat/${id}`, { method: 'GET' });
+      const response = await fetch(`/api/chat/${id}?isPooling=${isPooling}`, { method: 'GET' });
       if (response.status === 401) {
         router.push('/login');
         return;
@@ -1068,8 +1072,15 @@ export default function DashboardWorkspace() {
       }
 
       const result = await response.json();
-      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text }));
+      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text, createdAt: m.createdAt }));
+      
+      if (isPooling && msg?.length == 0) return;
+
       setChatHistory(msgs);
+      playNotification();
+      
+      if (isPooling) return;
+
       setCurrentConversationId(id);
       setActiveTab('chat');
     } catch {
@@ -1149,11 +1160,25 @@ export default function DashboardWorkspace() {
     }, 300);
   }
 
+  const playNotification = () => {
+    // Caminho para o seu arquivo de áudio
+    const audio = new Audio('./../notification.wav'); 
+    
+    audio.play().catch(error => {
+      console.error("Erro ao reproduzir o áudio:", error);
+    });
+  }
+
   useEffect(() => {
     switch (activeTab) {
       case 'chat': fetchConversations(); break;
       case 'contacts': fetchContacts(); break;
       case 'events': fetchEvents(); break;
+      case 'handover-queue': fetchHandoverQueue(); break;
+      case 'agenda': 
+          fetchScheduleSlots();
+      break;
+      case 'requests': fetchAppointmentRequests(); break;
       case 'users': fetchUsers(); break;
     }
   }, [activeTab]);
@@ -1198,10 +1223,9 @@ export default function DashboardWorkspace() {
         ) : (
           <div className="space-y-4">
             {chatHistory.map((msg, idx) => (
-              <div key={`${msg.sender}-${idx}`} className={`flex items-end gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.sender === 'assistant' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">AI</div>}
-                <div className={`max-w-[82%] rounded-[24px] px-4 py-3 shadow-sm ${msg.sender === 'user' ? 'rounded-br-md bg-gradient-to-r from-sky-600 to-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'}`}>
-                  {msg.sender === 'assistant' ? (
+              <div key={`${msg.sender}-${idx}`} className={`flex items-end gap-3 ${(msg.sender === 'user' || msg.sender === 'assistant') ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[82%] rounded-[24px] px-4 py-3 shadow-sm ${(msg.sender === 'user' || msg.sender === 'assistant') ? 'rounded-br-md bg-gradient-to-r from-sky-600 to-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'}`}>
+                  {(msg.sender === 'user' || msg.sender === 'assistant') ? (
                     <div className="prose prose-slate max-w-none text-sm [&>ul]:ml-4 [&>ol]:ml-4 [&>ul]:list-disc [&>ol]:list-decimal">
                       <ReactMarkdown
                         components={{
@@ -1226,7 +1250,17 @@ export default function DashboardWorkspace() {
                   ) : (
                     <p className="whitespace-pre-wrap text-sm leading-6">{msg.text}</p>
                   )}
+                  {(msg.sender === 'user' || msg.sender === 'assistant') ? (
+                    <div className="top-1 text-right mt-1 text-[11px] opacity-50">
+                      {msg.createdAt ? formatarData(msg.createdAt) : 'Desconhecida'}
+                    </div>
+                  ) : (
+                    <div className="top-1 text-left mt-1 text-[11px] opacity-50">
+                      {msg.createdAt ? formatarData(msg.createdAt) : 'Desconhecida'}
+                    </div>
+                  )}
                 </div>
+                {msg.sender === 'assistant' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">AI</div>}
                 {msg.sender === 'user' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">EU</div>}
               </div>
             ))}
