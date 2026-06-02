@@ -71,13 +71,15 @@ const startServer = async () => {
       console.log(`• Telefone: ${telefone}`);
       console.log(`• Chat ID: ${message.chatId}`);
       console.log(`• Texto: "${message.text}"`);
-
+      console.log(`• Sender ID: ${message.senderId}`);
+      console.log(`• HASH: ${sender.accessHash?.toString()}`);
       const conversationServiceInstance = new ConversationService();
 
       conversationServiceInstance.setClient(client)
       conversationServiceInstance.telegramReceiveMessage2({
         nome,
         telefone,
+        accessHash: sender.accessHash?.toString(),
         chatId: message.chatId,
         text: message.text,
         senderId: message.senderId,
