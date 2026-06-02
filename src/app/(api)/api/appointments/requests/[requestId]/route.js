@@ -73,7 +73,7 @@ export async function PATCH(request, { params }) {
       // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
       await prisma.messageQueue.create({
         data: {
-          chatId: rejected.conversation.telegramChatId || null,
+          conversationId: rejected.conversation.id || null,
           text: "Sua solicitação de agendamento foi recusada pelo gestor. Justificativa: " + justification,
         },
       });
@@ -150,7 +150,7 @@ export async function PATCH(request, { params }) {
     // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
     await prisma.messageQueue.create({
       data: {
-        chatId: approved.conversation.telegramChatId || null,
+        conversationId: approved.conversation.id || null,
         text: "Sua solicitação de agendamento foi aprovada pelo gestor.",
       },
     });

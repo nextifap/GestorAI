@@ -21,6 +21,12 @@ export async function GET(request) {
       },
       orderBy: { createdAt: 'desc' },
       include: {
+        contact: {
+          select: {
+            name: true,
+            telephone: true,
+          },
+        },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 3,

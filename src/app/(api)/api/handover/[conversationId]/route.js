@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '../../../../../../lib/prisma';
+import prisma from '@/lib/prisma';
 import { verifyRequestToken } from '@/lib/auth';
 import { saveSystemLog } from '@/lib/systemLog';
 import { errorResponse, respondAuthError } from '@/lib/apiErrors';

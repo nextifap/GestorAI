@@ -2,6 +2,7 @@ import { saveSystemLog } from './../../../lib/systemLog.js';
 import prisma from './../../../lib/prisma.js';
 import { getAcademicContextForPrompt } from './../../../lib/academicContext.js';
 import groqService from './groqService.js';
+import { checkInterventionRequired } from './handover.js';
 
 const { resolveScheduleCommand, groq, hasScheduleCommand } = groqService;
 class ConversationService {
@@ -106,10 +107,28 @@ class ConversationService {
                 }
             });
 
+            // 1. Cria um objeto Date com o início do dia de hoje (00:00:00)
+            const inicioDoDia = new Date();
+            inicioDoDia.setHours(0, 0, 0, 0);
+
             // 1. Tenta buscar uma conversa existente para esse contato
             var conversation = await prisma.conversation.findFirst({
                 where: {
                     contactId: contact.id,
+                },
+                select: {
+                    messages: {
+                        orderBy: { createdAt: 'desc' },
+                        where: {
+                            createdAt: {
+                                gte: inicioDoDia
+                            }
+                        },
+                        take: 10
+                    },
+                    id: true,
+                    status: true,
+                    telegramChatId: true,
                 }
             });
 
@@ -119,8 +138,10 @@ class ConversationService {
             if (!conversation) {
                 conversation = await prisma.conversation.create({
                     data: {
+                        channel: 'telegram',
                         summary: body.text.substring(0, 100),
                         telegramChatId: body.chatId,
+                        telegramAccessHash: body.accessHash,
                         newMessages: true,
                         user: {
                             connect: { id: user.id }
@@ -131,9 +152,18 @@ class ConversationService {
                     }
                 });
             } else {
+
+                const mensagensConcatenadas = conversation.messages
+                    .map(msg => msg.text)
+                    .join('\n');
+
+                var conversationStatus = await checkInterventionRequired(mensagensConcatenadas).then(res => res.status);
+
+                console.warn(`Status avaliado para a conversa ${conversation.id}: ${conversationStatus}`);
+
                 conversation = await prisma.conversation.update({
                     where: { id: conversation.id },
-                    data: { newMessages: true }
+                    data: { telegramAccessHash: body.accessHash, newMessages: true, status: conversationStatus, channel: 'telegram', updatedAt: new Date() }
                 });
             }
 
@@ -154,6 +184,7 @@ class ConversationService {
 
             if (conversation.status === 'handover_pending' || conversation.status === 'handover_in_progress') {
                 this.sendAssistantMessage('Seu atendimento está em revisão manual pelo coordenador. Retornaremos em breve.', conversation, 'assistant');
+                return;
             }
 
             const agendamento = await this.getDateAgendamento(body.text);

@@ -305,10 +305,10 @@ export default function DashboardWorkspace() {
 
         await Promise.all([
           fetchConversations(),
-          fetchHandoverQueue(),
-          fetchScheduleSlots(),
-          fetchAppointmentRequests(),
-          fetchEvents(),
+          // fetchHandoverQueue(),
+          // fetchScheduleSlots(),
+          // fetchAppointmentRequests(),
+          // fetchEvents(),
         ]);
 
         setLoading(false);
@@ -1077,9 +1077,11 @@ export default function DashboardWorkspace() {
       if (isPooling && msg?.length == 0) return;
 
       setChatHistory(msgs);
-      playNotification();
       
-      if (isPooling) return;
+      if (isPooling) {
+        playNotification();
+        return;
+      }
 
       setCurrentConversationId(id);
       setActiveTab('chat');
@@ -1174,7 +1176,7 @@ export default function DashboardWorkspace() {
       case 'chat': fetchConversations(); break;
       case 'contacts': fetchContacts(); break;
       case 'events': fetchEvents(); break;
-      case 'handover-queue': fetchHandoverQueue(); break;
+      case 'handover': fetchHandoverQueue(); break;
       case 'agenda': 
           fetchScheduleSlots();
       break;
@@ -1441,10 +1443,31 @@ export default function DashboardWorkspace() {
       <div className="mt-5 grid gap-3">
         {handoverQueue.length === 0 && <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Sem conversas pendentes.</div>}
         {handoverQueue.map((conv) => (
-          <div key={conv.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-medium text-slate-800">{conv.summary}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{conv.handlingMode || 'Manual'}</p>
-            <button onClick={() => handleTakeHandover(conv.id)} className="mt-3 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500">Assumir conversa</button>
+          <div key={conv.id} className="p-4 bg-white rounded-lg shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+              <span className="font-semibold text-base text-slate-900">
+                {conv.contact?.name || "Usuário desconhecido"}
+              </span>
+              <span className="text-xs text-slate-500 font-mono bg-slate-50 px-2 py-1 rounded">
+                {conv.contact?.telephone || conv.contact?.phone || "Número desconhecido"}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              {conv.messages?.map((msg, index) => (
+                <p 
+                  key={msg.id || index} 
+                  className="text-sm font-medium text-slate-800 break-words bg-slate-50/60 px-3 py-1.5 rounded-md"
+                >
+                  {msg.text}
+                </p>
+              ))}
+            </div>
+
+            <div className="w-auto flex flex-col ml-auto items-start gap-2 mt-3">
+              <p className="mt-1 mr-auto text-[11px] uppercase tracking-wide text-slate-500">{conv.handlingMode || 'Manual'}</p>
+              <button onClick={() => handleTakeHandover(conv.id)} className="mt-3 ml-auto rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500">Assumir conversa</button>
+            </div>
           </div>
         ))}
       </div>
@@ -1480,7 +1503,7 @@ export default function DashboardWorkspace() {
             />
           </div>
         </div>
-        <div className="relative w-full mt-5 grid gap-2 max-h-[calc(100vh-400px)] overflow-y-auto">
+        <div className="relative w-full mt-5 grid gap-2 max-h-full overflow-y-auto">
           {paginatedConversations.length === 0 && conversations.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Nenhuma conversa encontrada.</div>
           )}
