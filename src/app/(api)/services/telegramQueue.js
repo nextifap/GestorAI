@@ -1,6 +1,5 @@
 import prisma from './../../../lib/prisma.js';
 import { Api } from "telegram";
-import JSBI from "jsbi"; // 🔥 Importação necessária para o GramJS lidar com números longos
 
 async function checkAndProcessQueue(client) {
   var nextMessage = null;
@@ -12,10 +11,11 @@ async function checkAndProcessQueue(client) {
       where: { status: status },
       select: {
         id: true,
+        conversationId: true, // 🔥 Buscando o ID real da ChatMessage para corrigir o erro final
         conversation: {
           select: {
             telegramChatId: true,
-            telegramAccessHash: true, // 🔥 Certifique-se de que o nome no schema é exatamente este
+            telegramAccessHash: true, 
           },
         },
         text: true,
@@ -41,10 +41,11 @@ async function checkAndProcessQueue(client) {
     const accessHash = nextMessage.conversation.telegramAccessHash;
 
     if (accessHash) {
-      // 🔥 Cria o endereço completo para envio imediato (sem getDialogs)
+      // 🔥 Correção: Usando BigInt nativo para evitar o erro "shiftRight is not a function"
+      // O BigInt nativo do JavaScript lê perfeitamente strings com números negativos.
       const peer = new Api.InputPeerUser({
-        userId: JSBI.BigInt(chatId),
-        accessHash: JSBI.BigInt(accessHash)
+        userId: BigInt(chatId),
+        accessHash: BigInt(accessHash)
       });
 
       await client.sendMessage(peer, { 
@@ -87,13 +88,12 @@ async function checkAndProcessQueue(client) {
     }
   }
 
-  // 6. Atualiza o status na tabela ChatMessage (Garantindo que só roda se houver mensagem)
-  // 💡 Nota técnica: se você salvou o ID da ChatMessage dentro da MessageQueue,
-  // mude o código abaixo para: nextMessage.chatMessageId (ou o nome do campo de relação que você criou)
-  if (nextMessage) {
+  // 6. Atualiza o status na tabela ChatMessage usando a relação correta
+  // 🔥 Correção: Agora usa o 'chatMessageId' em vez de usar o ID da fila, evitando o erro de registro não encontrado
+  if (nextMessage && nextMessage.chatMessageId) {
     try {
       await prisma.chatMessage.update({
-        where: { id: nextMessage.id }, 
+        where: { id: nextMessage.chatMessageId }, 
         data: { telegramStatus: status },
       });
     } catch (dbError) {
