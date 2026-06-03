@@ -2,9 +2,11 @@ import { saveSystemLog } from './../../../lib/systemLog.js';
 import prisma from './../../../lib/prisma.js';
 import { getAcademicContextForPrompt } from './../../../lib/academicContext.js';
 import groqService from './groqService.js';
+import eventService from './eventService.js';
 import { checkInterventionRequired } from './handover.js';
 
 const { resolveScheduleCommand, groq, hasScheduleCommand } = groqService;
+const { hasEventQueryIntent, resolveEventQuery } = eventService;
 class ConversationService {
     constructor() {
         this.conversation = [];
@@ -210,6 +212,29 @@ class ConversationService {
 
                 this.sendAssistantMessage(scheduleResponse?.message, conversation, 'assistant');
                 return;
+            }
+
+            // Consulta (apenas leitura) dos próximos eventos da faculdade.
+            if (hasEventQueryIntent(body.text)) {
+                const eventResponse = await resolveEventQuery(user.id);
+
+                if (eventResponse?.message) {
+                    await prisma.chatMessage.create({
+                        data: {
+                            conversationId: conversation.id,
+                            text: eventResponse.message,
+                            sender: 'assistant',
+                        },
+                    });
+
+                    await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { updatedAt: new Date() },
+                    });
+
+                    this.sendAssistantMessage(eventResponse.message, conversation, 'assistant');
+                    return;
+                }
             }
 
             // Limita o contexto para as últimas 10 mensagens (Performance)
