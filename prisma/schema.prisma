@@ -166,7 +166,8 @@ model MessageQueue {
   text       String   // A mensagem que será enviada
   status     String   @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
   error      String?  // Caso dê erro no envio, guarda o motivo aqui
-
+  messageId String?
+  
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

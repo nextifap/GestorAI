@@ -11,6 +11,7 @@ async function checkAndProcessQueue(client) {
       where: { status: status },
       select: {
         id: true,
+        messageId: true,
         conversationId: true,
         conversation: {
           select: {
@@ -82,10 +83,10 @@ async function checkAndProcessQueue(client) {
     }
   }
 
-  if (nextMessage && nextMessage.chatMessageId) {
+  if (nextMessage && nextMessage.messageId) {
     try {
       await prisma.chatMessage.update({
-        where: { id: nextMessage.chatMessageId }, 
+        where: { id: nextMessage.messageId }, 
         data: { telegramStatus: status },
       });
     } catch (dbError) {

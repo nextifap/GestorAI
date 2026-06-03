@@ -1072,8 +1072,15 @@ export default function DashboardWorkspace() {
         return;
       }
 
+      const messageStatus = {
+        "PENDING": 'Pendente',
+        "SENT": 'Enviado',
+        "DELIVERED": 'Entregue',
+        "READ": 'Lido',
+        "FAILED": 'Falhou',
+      };
       const result = await response.json();
-      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text, createdAt: m.createdA, status: m.status, id: m.id, conversationId: m.conversationId }));
+      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text, createdAt: m.createdA, status: messageStatus[m.telegramStatus], id: m.id, conversationId: m.conversationId }));
       
       if (isPooling && msg?.length == 0) return;
 
@@ -1227,7 +1234,8 @@ export default function DashboardWorkspace() {
           <div className="space-y-4">
             {chatHistory.map((msg, idx) => (
               <div key={`${msg.sender}-${idx}`} className={`flex items-end gap-3 ${(msg.sender === 'user' || msg.sender === 'assistant') ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[82%] rounded-[24px] px-4 py-3 shadow-sm ${(msg.sender === 'user' || msg.sender === 'assistant') ? 'rounded-br-md bg-gradient-to-r from-sky-600 to-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'}`}>
+                <div className='flex flex-col max-w-[82%]'>
+                <div className={`max-w-[100%] rounded-[24px] px-4 py-3 shadow-sm ${(msg.sender === 'user' || msg.sender === 'assistant') ? 'rounded-br-md bg-gradient-to-r from-sky-600 to-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'}`}>
                   {(msg.sender === 'user' || msg.sender === 'assistant') ? (
                     <div className="prose prose-slate max-w-none text-sm [&>ul]:ml-4 [&>ol]:ml-4 [&>ul]:list-disc [&>ol]:list-decimal">
                       <ReactMarkdown
@@ -1263,9 +1271,13 @@ export default function DashboardWorkspace() {
                     </div>
                   )}
                 </div>
+                {(msg.sender === 'user' || msg.sender === 'assistant') ? (
+                    <div className="ml-auto mt-1 text-[10px] italic font-medium tracking-wider uppercase text-gray-500">
+                      {msg.status}
+                    </div> ) : null }
+                </div>
                 {msg.sender === 'assistant' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">AI</div>}
                 {msg.sender === 'user' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">EU</div>}
-                <div> AKI {JSON.stringify(msg)} </div>
               </div>
             ))}
             <div ref={chatEndRef} />

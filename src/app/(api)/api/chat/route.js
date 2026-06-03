@@ -151,6 +151,8 @@ export async function POST(req) {
   }
 
   const { id: userId } = verificacao.usuario;
+  
+  var message;
 
   // Lê body
   let conversationId, userMessage;
@@ -183,8 +185,9 @@ export async function POST(req) {
     }
 
     // Salva mensagem do usuário
-    await prisma.chatMessage.create({
+    message = await prisma.chatMessage.create({
       data: {
+        telegramStatus: "PENDING",
         conversationId,
         text: userMessage,
         sender: 'user',
@@ -203,6 +206,7 @@ export async function POST(req) {
   // Adiciona na filaa a nova mensagem para processamento assíncrono do bot (resposta rápida ao usuário)
   await prisma.messageQueue.create({
     data: {
+      messageId: message.id, // Será atualizado depois que a mensagem for criada
       conversationId: conversation.id || null,
       text: userMessage,
     },
