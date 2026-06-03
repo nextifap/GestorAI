@@ -18,6 +18,7 @@ import {
 import { formatarData } from '@/lib/utils';
 import { getApiErrorMessage, readApiError } from '@/lib/apiClient';
 import SidebarInfo from './components/Sidebar';
+import TelegramStatus from './components/HealthCheckStatus';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
 const baseTabOptions = [
@@ -1072,7 +1073,7 @@ export default function DashboardWorkspace() {
       }
 
       const result = await response.json();
-      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text, createdAt: m.createdAt }));
+      const msgs = result.conversation.messages.map((m) => ({ sender: m.sender, text: m.text, createdAt: m.createdA, status: m.status, id: m.id, conversationId: m.conversationId }));
       
       if (isPooling && msg?.length == 0) return;
 
@@ -1264,6 +1265,7 @@ export default function DashboardWorkspace() {
                 </div>
                 {msg.sender === 'assistant' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">AI</div>}
                 {msg.sender === 'user' && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">EU</div>}
+                <div> AKI {JSON.stringify(msg)} </div>
               </div>
             ))}
             <div ref={chatEndRef} />
@@ -1794,6 +1796,9 @@ export default function DashboardWorkspace() {
               <div className="text-xl font-semibold text-slate-900">{formatDateDDMMYYYY(todayIso) || '--'}</div>
               <div className="text-xs text-slate-500">Hoje na agenda</div>
             </div>
+          </div>
+          <div className="relative mt-2 mb-1 w-full justify-end flex items-end bg-orange gap-2">
+            <TelegramStatus />
           </div>
         </header>
 
