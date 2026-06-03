@@ -221,7 +221,7 @@ class ConversationService {
 
             // Formata mensagens para Groq (inverte a ordem para cronologia correta)
             const chatMessages = messages.reverse().map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'assistant',
+                role: msg.sender === 'user' ? 'user' : (msg.sender === 'assistant' ? 'assistant' : 'user'),
                 content: msg.text,
             }));
                 
