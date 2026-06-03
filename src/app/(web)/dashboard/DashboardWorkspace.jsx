@@ -364,7 +364,7 @@ export default function DashboardWorkspace() {
                       ...conv
                     };
                   }
-                  return item;
+                  return a;
                 });
                 setConversations(updated);
               }
