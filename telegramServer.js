@@ -1,13 +1,17 @@
-import { TelegramClient } from "telegram";
+import { TelegramClient, Api } from "telegram";
 import "dotenv/config";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 import input from "input";
 import ConversationService from "./src/app/(api)/services/conversationService.js";
 import checkAndProcessQueue from "./src/app/(api)/services/telegramQueue.js";
+import prisma from "./src/lib/prisma.js";
 
 const apiId = parseInt(process.env.TELEGRAM_API_ID, 10);
 const apiHash = process.env.TELEGRAM_API_HASH;
+
+var checkHealthStatusId = null;
+var iniciarKeepAliveId = null;
 
 if (isNaN(apiId) || !apiHash) {
   console.error("❌ ERRO: Verifique se o TELEGRAM_API_ID e TELEGRAM_API_HASH estão corretos no arquivo .env");
@@ -26,6 +30,10 @@ const client = new TelegramClient(
 );
 
 const startServer = async () => {
+
+  iniciarKeepAlive(client);
+  checkHealthStatus(); 
+  
   console.log("Iniciando cliente do Telegram...");
   
   await client.start({
@@ -94,5 +102,44 @@ const startServer = async () => {
   client.addEventHandler(eventHandler, new NewMessage({ incoming: true }));
 
 };
+
+const checkHealthStatus = () => {
+  clearInterval(checkHealthStatusId);
+
+  checkHealthStatusId = setInterval(() => {
+    var status = "PENDING";
+  
+    if (!(client.session && client.session.authKey)) {
+      status = "DISCONNECTED";
+    } else if (client.connected) {
+      status = "CONNECTED";
+    } else {
+      status = "DISCONNECTED";
+    }
+    
+    prisma.TelegramHealthStatus.create({
+      data: {status: status},
+    }).catch((err) => {
+      console.error("Erro ao atualizar status de saúde no banco:", err);
+    });
+  }, 1000 * 60 * 5);
+}
+
+// Função para manter a conexão ativa
+function iniciarKeepAlive(client) {
+  clearInterval(iniciarKeepAliveId);
+
+    iniciarKeepAliveId = setInterval(async () => {
+        if (client.connected) {
+            try {
+                // Envia uma requisição super leve apenas para dizer "estou aqui"
+                await client.invoke(new Api.help.GetConfig());
+                console.log("[Keep-Alive] Ping enviado com sucesso.");
+            } catch (error) {
+                console.error("[Keep-Alive] Erro ao pingar o Telegram:", error.message);
+            }
+        }
+    }, 1000 * 60 * 3); // Executa a cada 3 minutos
+}
 
 export { startServer };

@@ -30,6 +30,12 @@ model User {
   requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
 }
 
+model TelegramHealthStatus {
+  id              String         @id @default(uuid())
+  createdAt   DateTime @default(now())
+  status String
+}
+
 model Task {
   id            String    @id @default(uuid())
   title         String
