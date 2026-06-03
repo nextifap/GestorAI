@@ -49,11 +49,9 @@ async function resolveScheduleCommand(
   const wantsAvailability = agendamento.isAvailabilityQuery;
   const wantsAppointment = agendamento.isAppointmentRequest || hasDateTime;
 
-  console.log("KAIO - 0", wantsAvailability, wantsAppointment, agendamento);
   if (!wantsAvailability && !wantsAppointment) {
     return { status: false, message: null };
   }
-  console.log("KAIO - 1", agendamento);
 
   /**
    * =========================
@@ -82,8 +80,6 @@ async function resolveScheduleCommand(
       channel: conversation.channel || 'web',
       conversationId: conversation.id,
     });
-
-    console.log("CAIO>>>", appointmentResult)
 
     if (!appointmentResult.ok) {
       return {   

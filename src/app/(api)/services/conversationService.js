@@ -184,6 +184,29 @@ class ConversationService {
                 },
             });
 
+            // Consulta (apenas leitura) dos próximos eventos da faculdade.
+            if (hasEventQueryIntent(body.text)) {
+                const eventResponse = await resolveEventQuery(user.id);
+
+                if (eventResponse?.message) {
+                    await prisma.chatMessage.create({
+                        data: {
+                            conversationId: conversation.id,
+                            text: eventResponse.message,
+                            sender: 'assistant',
+                        },
+                    });
+
+                    await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { updatedAt: new Date() },
+                    });
+
+                    this.sendAssistantMessage(eventResponse.message, conversation, 'assistant');
+                    return;
+                }
+            }
+
             if (conversation.status === 'handover_pending' || conversation.status === 'handover_in_progress') {
                 this.sendAssistantMessage('Seu atendimento está em revisão manual pelo coordenador. Retornaremos em breve.', conversation, 'assistant');
                 return;
@@ -212,29 +235,6 @@ class ConversationService {
 
                 this.sendAssistantMessage(scheduleResponse?.message, conversation, 'assistant');
                 return;
-            }
-
-            // Consulta (apenas leitura) dos próximos eventos da faculdade.
-            if (hasEventQueryIntent(body.text)) {
-                const eventResponse = await resolveEventQuery(user.id);
-
-                if (eventResponse?.message) {
-                    await prisma.chatMessage.create({
-                        data: {
-                            conversationId: conversation.id,
-                            text: eventResponse.message,
-                            sender: 'assistant',
-                        },
-                    });
-
-                    await prisma.conversation.update({
-                        where: { id: conversation.id },
-                        data: { updatedAt: new Date() },
-                    });
-
-                    this.sendAssistantMessage(eventResponse.message, conversation, 'assistant');
-                    return;
-                }
             }
 
             // Limita o contexto para as últimas 10 mensagens (Performance)
