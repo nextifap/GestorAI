@@ -45,3 +45,10 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# MDs
+*.md
+!README.md
+
+docker-compose.yml
+

@@ -1,46 +1,49 @@
 // app/api/conversations/route.js
 
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '../../../../lib/prisma';
-
-function verificarToken(request) {
-  const token = request.headers.get('authorization')?.split(' ')[1];
-  if (!token) return { error: 'Token não fornecido.', status: 401 };
-  try {
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
+import { saveSystemLog } from '@/lib/systemLog';
+import { verifyRequestToken } from '@/lib/auth';
+import conversationService from '../../services/conversationService';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 // Rota GET para buscar o histórico de conversas
 export async function GET(request) {
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
+  if (verificacao.status !== 200) {
+    return respondAuthError(verificacao);
+  }
+
+  const params = request.nextUrl.searchParams;
+  
+  const { id: userId } = verificacao.usuario;
+  const contactName =  params.get("contact");
+  const newMessages =  params.get("newMessages") === "true";
+
   if (verificacao.status !== 200) {
     return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
   }
 
-  const { id: userId } = verificacao.usuario;
-
   try {
-    const conversations = await prisma.conversation.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+    const conversationInstance = new conversationService();
+    const conversations = await conversationInstance.getConversations(contactName, userId, newMessages);
     return NextResponse.json({ conversations }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: 'Erro ao buscar histórico.' }, { status: 500 });
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/conversations',
+      message: 'Erro ao buscar histórico de conversas.',
+      context: { error, userId },
+    });
+    return errorResponse('CONVERSATIONS_FETCH_FAILED');
   }
 }
 
 // Rota POST para salvar um novo resumo de conversa
 export async function POST(request) {
-  const verificacao = verificarToken(request);
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
@@ -50,11 +53,20 @@ export async function POST(request) {
     const newConversation = await prisma.conversation.create({
       data: {
         summary,
-        userId,
+            user: {
+              connect: { id: userId }
+            }
       },
     });
     return NextResponse.json({ conversation: newConversation }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: 'Erro ao salvar conversa.' }, { status: 500 });
+    console.log(error, `USER >>>> ${userId}`);
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/conversations',
+      message: 'Erro ao salvar conversa.',
+      context: { error, userId },
+    });
+    return errorResponse('CONVERSATION_CREATE_FAILED');
   }
 }

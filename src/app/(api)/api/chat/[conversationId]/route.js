@@ -1,51 +1,71 @@
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '../../../../../lib/prisma';
-
-// Middleware para verificar a autenticação (pode ser a mesma função reutilizada)
-function verificarToken(request) {
-  const token = request.headers.get('authorization')?.split(' ')[1];
-  if (!token) return { error: 'Token não fornecido.', status: 401 };
-  try {
-    const usuario = jwt.verify(token, process.env.JWT_SECRET);
-    return { usuario, status: 200 };
-  } catch (error) {
-    return { error: 'Token inválido.', status: 401 };
-  }
-}
+import { saveSystemLog } from '@/lib/systemLog';
+import { verifyRequestToken } from '@/lib/auth';
+import { errorResponse, respondAuthError } from '@/lib/apiErrors';
 
 // Rota GET para buscar todas as mensagens de uma conversa
 export async function GET(request, { params }) {
-  const verificacao = verificarToken(request);
+
+  params = await params;
+
+  const verificacao = verifyRequestToken(request);
   if (verificacao.status !== 200) {
-    return NextResponse.json({ error: verificacao.error }, { status: verificacao.status });
+    return respondAuthError(verificacao);
   }
 
   const { id: userId } = verificacao.usuario;
   const conversationId = params.conversationId;
+  const isPooling = params.isPooling === 'true' || params.isPooling === true; // Parâmetro para indicar se é uma requisição de pooling (atualização periódica)
 
   try {
-    // Buscar a conversa e suas mensagens e verificar se ela pertence ao usuário logado
+    // 1. Calcula a data de 3 meses atrás
+    const seisMesesAtras = new Date();
+    seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
+
+    // 2. Busca a conversa com o filtro de tempo e limite
     const conversationWithMessages = await prisma.conversation.findFirst({
       where: {
         id: conversationId,
         userId: userId,
+        ...(isPooling && { newMessages: true }),
       },
       include: {
         messages: {
-          orderBy: { createdAt: 'asc' }, // Ordena as mensagens em ordem cronológica
+          where: {
+            createdAt: {
+              gte: seisMesesAtras, //mensagens criadas de 3 meses atrás até hoje
+            },
+          },
+          orderBy: { createdAt: 'desc' }, //  Pega as mais recentes primeiro para o 'take' não cortar as erradas
+          take: 100, //Trava de segurança: traz no máximo 150 mensagens
         },
       },
     });
 
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { newMessages: false }, // Marca que as mensagens foram lidas/visualizadas
+    });
+
+    // 3. Reorganiza na ordem cronológica (antiga -> nova) para o chat fazer sentido na tela
+    if (conversationWithMessages && conversationWithMessages.messages) {
+      conversationWithMessages.messages.reverse();
+    }
+
     if (!conversationWithMessages) {
-      return NextResponse.json({ error: 'Conversa não encontrada ou não pertence ao usuário.' }, { status: 404 });
+      return errorResponse('CHAT_CONVERSATION_NOT_FOUND');
     }
 
     return NextResponse.json({ conversation: conversationWithMessages }, { status: 200 });
 
   } catch (error) {
-    console.error('Erro ao buscar mensagens da conversa:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    await saveSystemLog({
+      level: 'ERROR',
+      source: 'api/chat/[conversationId]',
+      message: 'Erro ao buscar mensagens da conversa.',
+      context: { error, conversationId, userId },
+    });
+    return errorResponse('CHAT_MESSAGES_FETCH_FAILED');
   }
 }

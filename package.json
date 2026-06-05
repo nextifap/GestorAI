@@ -6,21 +6,31 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "seed:unifap": "node prisma/seed_unifap.js",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
+    "date-holidays": "^3.27.0",
     "dotenv": "^17.2.2",
     "groq-sdk": "^0.32.0",
+    "input": "^1.0.1",
     "jose": "^6.1.0",
+    "jsbi": "^4.3.2",
     "jsonwebtoken": "^9.0.2",
     "next": "15.5.2",
     "prisma": "^6.16.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "telegram": "^2.26.22",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -29,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13"
+    "tailwindcss": "^4.1.13",
+    "vitest": "^0.34.6"
   }
 }

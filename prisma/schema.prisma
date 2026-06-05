@@ -4,12 +4,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// MUDANÇA 1: Altera o provider para "postgresql"
-// MUDANÇA 2: Adiciona a directUrl para o Prisma Migrate funcionar no Supabase
+// Configuracao SQLite para desenvolvimento local
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") 
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -17,9 +15,25 @@ model User {
   email           String         @unique
   senha           String
   nomeCompleto    String
+  role            String         @default("user")
+  mustChangeCredentials Boolean  @default(false)
+  telegramId      String?        @unique @map("telegram_id")
 
   tasks           Task[]
+  events          CampusEvent[]
   conversations   Conversation[]
+  scheduleSlots   ManagerScheduleSlot[]
+  contacts        Contact[]
+
+
+  managedAppointmentRequests AppointmentRequest[] @relation("ManagedAppointments")
+  requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
+}
+
+model TelegramHealthStatus {
+  id              String         @id @default(uuid())
+  createdAt   DateTime @default(now())
+  status String
 }
 
 model Task {
@@ -32,20 +46,218 @@ model Task {
   user          User      @relation(fields: [userId], references: [id])
 }
 
+model CampusEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  eventDate   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([eventDate])
+  @@index([userId, eventDate])
+}
+
+model Contact {
+  id        String  @id @default(uuid())
+  name      String?  // e.g., "John Doe"
+  telephone String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  conversations Conversation[]
+  userId String? // Refere-se a um contato de um outro User
+  user User?      @relation(fields: [userId], references: [id])
+  deleted Int?
+  @@index([id, name, telephone])
+}
+
 model Conversation {
   id            String        @id @default(uuid())
   summary       String
   createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now())
+  status        String        @default("active")
+  channel       String        @default("web")
+  handlingMode  String        @default("Automatizado")
+  handoverAt    DateTime?
+  handoverNote  String?
+  triageScore   Float?
+  triageReason  String?
   userId        String
+  contactId     String?
+  telegramChatId        String?
+  telegramAccessHash        String?
   user          User          @relation(fields: [userId], references: [id])
+  contact       Contact?      @relation(fields: [contactId], references: [id])
+  newMessages   Boolean?
   messages      ChatMessage[]
+  appointmentRequests AppointmentRequest[]
+  MessageQueue       MessageQueue[]
+
+  @@index([status, createdAt])
+  @@index([channel, createdAt])
+}
+
+model ManagerScheduleSlot {
+  id            String   @id @default(uuid())
+  date          DateTime
+  hour          Int
+  isAvailable   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  managerId     String
+  manager       User     @relation(fields: [managerId], references: [id])
+  appointmentRequests AppointmentRequest[]
+
+  @@unique([managerId, date, hour])
+  @@index([date, hour])
+}
+
+model AppointmentRequest {
+  id             String   @id @default(uuid())
+  requestedDate  DateTime
+  requestedHour  Int
+  status         String   @default("pending")
+  justification  String?
+  channel        String   @default("web")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  managerId      String
+  manager        User     @relation("ManagedAppointments", fields: [managerId], references: [id])
+  requesterId    String
+  requester      User     @relation("RequestedAppointments", fields: [requesterId], references: [id])
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  managerSlotId  String?
+  managerSlot    ManagerScheduleSlot? @relation(fields: [managerSlotId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([requestedDate, requestedHour])
+  @@index([managerId, status, createdAt])
 }
 
 model ChatMessage {
   id             String       @id @default(uuid())
   text           String
   sender         String
+  telegramStatus         String?
   createdAt      DateTime     @default(now())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  source    String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level])
+}
+
+model MessageQueue {
+  id         String   @id @default(uuid())
+  conversationId     String?   // Para quem enviar (ID do chat ou @username)
+  text       String   // A mensagem que será enviada
+  status     String   @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
+  error      String?  // Caso dê erro no envio, guarda o motivo aqui
+  messageId String?
+  
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Models adicionados para suportar ingestão de metadados UniFAP
+model Institution {
+  id           String   @id @default(uuid())
+  name         String
+  shortName    String?  @map("short_name")
+  city         String?
+  state        String?
+  country      String?
+  foundedYear  Int?     @map("founded_year")
+  status       String?
+  description  String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  courses        Course[]
+  calendarEvents AcademicCalendarEvent[]
+  infrastructures Infrastructure[]
+  facultyMembers  FacultyMember[]
+  ragMetadata     RagMetadata[]
+}
+
+model Course {
+  id                String   @id @default(uuid())
+  institutionId     String   @map("institution_id")
+  institution       Institution @relation(fields: [institutionId], references: [id])
+  name              String
+  code              String?
+  degree            String?
+  durationSemesters Int?     @map("duration_semesters")
+  workloadHours     Int?     @map("workload_hours")
+  objective         String?
+  audience          String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  curriculumOverviews CurriculumOverview[]
+}
+
+model CurriculumOverview {
+  id        String   @id @default(uuid())
+  courseId  String   @map("course_id")
+  course    Course   @relation(fields: [courseId], references: [id])
+  semester  Int?
+  topics    String?
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model AcademicCalendarEvent {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  title         String
+  eventDate     DateTime? @map("event_date")
+  description   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+}
+
+model Infrastructure {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String
+  description   String?
+  features      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+}
+
+model FacultyMember {
+  id            String   @id @default(uuid())
+  institutionId String   @map("institution_id")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String
+  role          String?
+  profile       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+}
+
+model RagMetadata {
+  id          String   @id @default(uuid())
+  source      String
+  tags        Json?
+  version     String?
+  language    String?
+  lastUpdated DateTime? @map("last_updated")
+  raw         Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  institutionId String? @map("institution_id")
+  institution   Institution? @relation(fields: [institutionId], references: [id])
 }
