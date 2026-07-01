@@ -1,6 +1,5 @@
 // app/api/chat/route.js
 import prisma from '@/lib/prisma';
-import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import { saveSystemLog } from '@/lib/systemLog';
 import { getRequestToken, verifyRequestToken } from '@/lib/auth';
@@ -14,10 +13,6 @@ import {
   formatSlotPtBr,
 } from '@/lib/schedule';
 import { resolveManagerUserId } from '@/lib/manager';
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY?.trim(),
-});
 
 function hasAvailabilityIntent(message) {
   const normalized = String(message || '').toLowerCase();

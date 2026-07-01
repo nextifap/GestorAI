@@ -413,7 +413,8 @@ class ConversationService {
     }
 
     async getDateAgendamento(text) {
-        const response = await groq.chat.completions.create({
+        try {
+                    const response = await groq.chat.completions.create({
                 model: 'openai/gpt-oss-20b',
                 temperature: 0,
                 messages: [
@@ -471,8 +472,6 @@ class ConversationService {
                 },
             ],
         });
-
-        try {
             return JSON.parse(response.choices[0]?.message?.content)
         } catch {
             return {};

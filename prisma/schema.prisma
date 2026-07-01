@@ -43,6 +43,11 @@ model TelegramConfig {
   step                        String?
 }
 
+model GroqConfig {
+  id                          String         @id @default(uuid())
+  hash                        Boolean?
+}
+
 model TelegramHealthStatus {
   id              String         @id @default(uuid())
   createdAt   DateTime @default(now())

@@ -11,9 +11,27 @@ import { resolveManagerUserId } from './../../../lib/manager.js';
 import Groq from "groq-sdk";
 import agendar from "./agendarService.js";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY?.trim(),
-});
+let groqInstance = null;
+
+async function getGroqClient() {
+  try {
+    const config = await prisma.groqConfig.findFirst();
+    if (!config || !config.hash) {
+      return null;
+    }
+    
+    if (!groqInstance) {
+      groqInstance = new Groq({
+        apiKey: config.hash,
+      });
+    }
+    
+    return groqInstance;
+  } catch (error) {
+    console.error('Erro ao recuperar configuração do Groq:', error);
+    return null;
+  }
+}
 
 function hasAvailabilityIntent(message) {
   const normalized = String(message || '').toLowerCase();
@@ -142,5 +160,5 @@ export default {
     return hasAvailabilityIntent(message) || hasAppointmentRequestIntent(message);
   },
   resolveScheduleCommand,
-  groq
+  getGroqClient,
 };  

@@ -11,9 +11,27 @@ import { errorResponse } from '@/lib/apiErrors';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY?.trim(),
-});
+let groqInstance = null;
+
+async function getGroqClient() {
+  try {
+    const config = await prisma.groqConfig.findFirst();
+    if (!config || !config.hash) {
+      return null;
+    }
+    
+    if (!groqInstance) {
+      groqInstance = new Groq({
+        apiKey: config.hash,
+      });
+    }
+    
+    return groqInstance;
+  } catch (error) {
+    console.error('Erro ao recuperar configuração do Groq:', error);
+    return null;
+  }
+}
 
 const triageSchema = z.object({
   needsHandover: z.boolean(),
@@ -82,7 +100,8 @@ function extractJson(content) {
 async function getTriageDecision(message) {
   const keywordEscalation = hasEscalationKeyword(message);
 
-  if (!process.env.GROQ_API_KEY?.trim()) {
+  const groq = await getGroqClient();
+  if (!groq) {
     return {
       needsHandover: keywordEscalation,
       confidence: keywordEscalation ? 0.9 : 0.55,
