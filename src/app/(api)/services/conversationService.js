@@ -19,7 +19,7 @@ class ConversationService {
     async telegramReceiveAMessage(message) {
 
         // No futuro pode pedir pra IA definir o destinatario da mensagem, e criar um contato novo caso necessário. Por enquanto, vamos associar todas as mensagens a um contato genérico.
-        const user = await prisma.user.findFirst({
+        const userManager = await prisma.user.findFirst({
             where: {
                 email: process.env.EMAIL_ADMIN
             }
@@ -35,7 +35,7 @@ class ConversationService {
             create: {
                 name: message.nome,
                 telephone: message.telefone,
-                userId: user.id
+                userId: userManager.id
             }
         });
 
@@ -53,7 +53,7 @@ class ConversationService {
                     summary: message.text.substring(0, 100),
                     telegramChatId: message.chatId,
                     user: {
-                        connect: { id: user.id }
+                        connect: { id: userManager.id }
                     },
                     contact: {
                         connect: { id: contact.id }
@@ -88,12 +88,19 @@ class ConversationService {
     async telegramReceiveMessage2(body) {
         try {
 
+            console.log('Mensagem recebida no ConversationService:', body);
+
             // No futuro pode pedir pra IA definir o destinatario da mensagem, e criar um contato novo caso necessário. Por enquanto, vamos associar todas as mensagens a um contato genérico.
-            var user = await prisma.user.findFirst({
+            var userManager = await prisma.user.findFirst({
                 where: {
-                    email: process.env.EMAIL_ADMIN
+                    telegramId: body.hostTelegramId
                 }
             });
+
+            if (!userManager) {
+                console.warn(`Nenhum usuário encontrado com telegramId ${body.hostTelegramId}. Impossível processar mensagem.`);
+                return;
+            }
 
             var contact = await prisma.contact.upsert({
                 where: {
@@ -105,7 +112,7 @@ class ConversationService {
                 create: {
                     name: body.nome,
                     telephone: body.telefone,
-                    userId: user.id
+                    userId: userManager.id
                 }
             });
 
@@ -134,7 +141,7 @@ class ConversationService {
                 }
             });
 
-            var userId = user.id;
+            var userId = userManager.id;
 
             // 2. Se não encontrar, cria uma nova conversa
             if (!conversation) {
@@ -146,7 +153,7 @@ class ConversationService {
                         telegramAccessHash: body.accessHash,
                         newMessages: true,
                         user: {
-                            connect: { id: user.id }
+                            connect: { id: userManager.id }
                         },
                         contact: {
                             connect: { id: contact.id }
@@ -186,7 +193,7 @@ class ConversationService {
 
             // Consulta (apenas leitura) dos próximos eventos da faculdade.
             if (hasEventQueryIntent(body.text)) {
-                const eventResponse = await resolveEventQuery(user.id);
+                const eventResponse = await resolveEventQuery(userManager.id);
 
                 if (eventResponse?.message) {
                     await prisma.chatMessage.create({
@@ -213,11 +220,7 @@ class ConversationService {
             }
 
             const agendamento = await this.getDateAgendamento(body.text);
-            const scheduleResponse = await resolveScheduleCommand(
-                agendamento,
-                user.id,
-                conversation,
-            );
+            const scheduleResponse = await resolveScheduleCommand(userManager.id, agendamento, conversation);
 
             if (scheduleResponse?.message) {
                 await prisma.chatMessage.create({
@@ -410,7 +413,8 @@ class ConversationService {
     }
 
     async getDateAgendamento(text) {
-        const response = await groq.chat.completions.create({
+        try {
+                    const response = await groq.chat.completions.create({
                 model: 'openai/gpt-oss-20b',
                 temperature: 0,
                 messages: [
@@ -468,8 +472,6 @@ class ConversationService {
                 },
             ],
         });
-
-        try {
             return JSON.parse(response.choices[0]?.message?.content)
         } catch {
             return {};

@@ -25,8 +25,7 @@ export async function GET(request) {
         requester: {
           select: {
             id: true,
-            nomeCompleto: true,
-            email: true,
+            name: true
           },
         },
       },
@@ -88,18 +87,6 @@ export async function POST(request) {
 
     if (!manager || (manager.role && manager.role !== 'gestor')) {
       return errorResponse('APPOINTMENT_MANAGER_NOT_FOUND');
-    }
-
-    // Verificar requester (quem faz a solicitação) não é gestor e não é o mesmo manager
-    const requester = await prisma.user.findUnique({ where: { id: requesterId } });
-    if (!requester) {
-      return errorResponse('APPOINTMENT_REQUESTER_NOT_FOUND');
-    }
-    if (requester.role && requester.role === 'gestor') {
-      return errorResponse('APPOINTMENT_REQUEST_FORBIDDEN_MANAGER');
-    }
-    if (requester.id === managerId) {
-      return errorResponse('APPOINTMENT_REQUEST_FORBIDDEN_SELF');
     }
 
     // Verificar se já existe uma solicitação idêntica

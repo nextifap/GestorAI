@@ -11,8 +11,14 @@ import { resolveManagerUserId } from './../../../lib/manager.js';
 import Groq from "groq-sdk";
 import agendar from "./agendarService.js";
 
+const groqConfig = async () => {
+  return await prisma.groqConfig.findFirst({
+    orderBy: { id: "desc" },
+  });
+}
+
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY?.trim(),
+  apiKey: (await groqConfig())?.hash?.trim(),
 });
 
 function hasAvailabilityIntent(message) {
@@ -39,11 +45,7 @@ function hasAppointmentRequestIntent(message) {
   ].some((term) => normalized.includes(term));
 }
 
-async function resolveScheduleCommand(
-  agendamento,
-  userId,
-  conversation
-) {
+async function resolveScheduleCommand(managerId, agendamento, conversation) {
 
   const hasDateTime = Boolean(agendamento?.date && Number.isFinite(agendamento?.hour));
   const wantsAvailability = agendamento.isAvailabilityQuery;
@@ -60,8 +62,6 @@ async function resolveScheduleCommand(
    */
   if (wantsAppointment) {
 
-    const managerId = await resolveManagerUserId(userId);
-
     const validation = validateScheduleInput({
       date: agendamento.date,
       hour: agendamento.hour,
@@ -71,7 +71,7 @@ async function resolveScheduleCommand(
       return { status: false, message: validation.error };
     }
 
-    const appointmentResult = await agendar(userId, {
+    const appointmentResult = await agendar(conversation.contactId, {
       requestUrl: conversation.requestUrl,
       authToken: conversation.authToken,
       managerId: managerId,
@@ -108,8 +108,6 @@ async function resolveScheduleCommand(
     targetDate = parseIsoDateOnly(agendamento.date);
   }
 
-  const managerId = await resolveManagerUserId(userId);
-
   const today = parseIsoDateOnly(toIsoDateOnly(new Date()));
 
   const whereDate = targetDate
@@ -144,6 +142,7 @@ async function resolveScheduleCommand(
     message: `Horários livres do gestor:\n${lines.join('\n')}`,
   };
 }
+
 
 export default {
   hasScheduleCommand: (message) => {

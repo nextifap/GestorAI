@@ -69,7 +69,7 @@ export async function checkInterventionRequired(text, currentStatus = 'active') 
   const keywordFallback = hasUrgentKeywords(text);
 
   // Se o Groq não estiver configurado ou disponível, usa o fallback de palavras-chave imediatamente
-  if (!process.env.GROQ_API_KEY?.trim() || !groq) {
+  if (!groq) {
     const finalStatus = keywordFallback ? 'handover_pending' : 'active';
     return {
       status: finalStatus,

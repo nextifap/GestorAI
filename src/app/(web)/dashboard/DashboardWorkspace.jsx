@@ -19,6 +19,8 @@ import { formatarData } from '@/lib/utils';
 import { getApiErrorMessage, readApiError } from '@/lib/apiClient';
 import SidebarInfo from './components/Sidebar';
 import TelegramStatus from './components/HealthCheckStatus';
+import TelegramLogin from './components/TelegramLogin';
+import GroqConfig from './components/GroqConfig';
 
 const businessHours = Array.from({ length: scheduleLimits.endHour - scheduleLimits.startHour + 1 }, (_, index) => scheduleLimits.startHour + index);
 const baseTabOptions = [
@@ -30,7 +32,8 @@ const baseTabOptions = [
   { id: 'handover', label: 'Handover' },
   { id: 'history', label: 'Histórico' },
 ];
-const adminTabOptions = [{ id: 'users', label: 'Usuarios' }];
+const adminTabOptions = [];
+const hiddenAdminTabs = [];
 const hideSidebarForTabs = ['chat'];
 const CONVERSATIONS_PER_PAGE = 8;
 
@@ -262,6 +265,13 @@ export default function DashboardWorkspace() {
   const visibleTabs = useMemo(() => {
     if (user?.role === 'admin') {
       return [...baseTabOptions, ...adminTabOptions];
+    }
+    return baseTabOptions;
+  }, [user?.role]);
+
+  const availableTabs = useMemo(() => {
+    if (user?.role === 'admin') {
+      return [...baseTabOptions, ...adminTabOptions, ...hiddenAdminTabs];
     }
     return baseTabOptions;
   }, [user?.role]);
@@ -1303,6 +1313,22 @@ export default function DashboardWorkspace() {
     </div>
   );
 
+  const renderTelegramPanel = () => (
+    <div className="rounded-[28px] border border-white/80 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+      <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Telegram</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Configuração do Telegram</h2>
+          <p className="mt-1 text-sm text-slate-500">Aqui você pode conectar seu Telegram e ajustar configurações de login.</p>
+        </div>
+        <button onClick={() => setActiveTab('chat')} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Voltar ao chat</button>
+      </div>
+      <div className="px-6 py-6">
+        <TelegramLogin />
+      </div>
+    </div>
+  );
+
   const renderAgendaPanel = () => (
     <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
@@ -1356,7 +1382,7 @@ export default function DashboardWorkspace() {
               const cellStatus = slot
                 ? slot.isAvailable
                   ? 'Livre'
-                  : 'Ocupado'
+                  : (`Reservado com ${slot.requester?.nomeCompleto}`)
                 : blockedReason
                   ? (holidayName || 'Fechado')
                   : 'Adicionar';
@@ -1652,6 +1678,22 @@ export default function DashboardWorkspace() {
     </div>
   );
 
+  const renderGroqConfigPanel = () => (
+    <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-700">Configuração</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">Groq API</h2>
+          <p className="mt-1 text-sm text-slate-500">Gerencie a configuração e autenticação da API do Groq.</p>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <GroqConfig />
+      </div>
+    </div>
+  );
+
   const renderEventsPanel = () => (
     <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-xl">
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1710,8 +1752,12 @@ export default function DashboardWorkspace() {
         return renderHistoryPanel();
       case 'users':
         return renderUsersPanel();
+      case 'groq-config':
+        return renderGroqConfigPanel();
       case 'contacts':
         return renderContactsPanel();
+      case 'telegram':
+        return renderTelegramPanel();
       case 'chat':
       default:
         return (
@@ -1783,6 +1829,10 @@ export default function DashboardWorkspace() {
                     <button onClick={() => { setActiveTab('users'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Usuários</button>
                   )}
                   <button onClick={() => { handleExport(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Exportar tarefas</button>
+                  <button onClick={() => { setActiveTab('telegram'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Telegram</button>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => { setActiveTab('groq-config'); setMenuOpen(false); window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Groq</button>
+                  )}
                   <button onClick={() => { document.getElementById('file-input').click(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Importar tarefas</button>
                   <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50">Sair</button>
                   <input type="file" id="file-input" className="hidden" onChange={handleImport} accept=".csv" />

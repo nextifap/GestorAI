@@ -25,6 +25,10 @@ const ERROR_DEFINITIONS = {
     status: 400,
     message: 'Mensagem do Telegram invalida ou incompleta.',
   },
+  TELEGRAM_CONFIG_REQUIRED: {
+    status: 400,
+    message: 'Informe telegramId e telegramHash para atualizar a configuracao do Telegram.',
+  },
   TELEGRAM_CHAT_FAILED: {
     status: 500,
     message: 'Nao conseguimos processar sua mensagem agora. Tente novamente.',

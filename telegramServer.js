@@ -7,40 +7,95 @@ import ConversationService from "./src/app/(api)/services/conversationService.js
 import checkAndProcessQueue from "./src/app/(api)/services/telegramQueue.js";
 import prisma from "./src/lib/prisma.js";
 
-const apiId = parseInt(process.env.TELEGRAM_API_ID, 10);
-const apiHash = process.env.TELEGRAM_API_HASH;
+const getConfig = async () => {
+  let config = await prisma.telegramConfig.findFirst({
+    orderBy: { id: "desc" },
+  })
 
-var checkHealthStatusId = null;
-var iniciarKeepAliveId = null;
+  if (!config) {
+    config = await prisma.telegramConfig.create({
+      data: {
+        apiTelegramId: "1111",
+        apiTelegramHash: "abc",
+      },
+    })
+  }
 
-if (isNaN(apiId) || !apiHash) {
-  console.error("❌ ERRO: Verifique se o TELEGRAM_API_ID e TELEGRAM_API_HASH estão corretos no arquivo .env");
-  process.exit(1);
+  return config
 }
 
-const stringSession = new StringSession(process.env.TELEGRAM_STRING_SESSION || "");
+var telegramConfig = await getConfig();
+var apiId = parseInt(telegramConfig?.apiTelegramId);
+var apiHash = telegramConfig?.apiTelegramHash;
+var checkHealthStatusId = null;
+var iniciarKeepAliveId = null;
+var stringSession = telegramConfig?.apiTelegramSession;
 
-const client = new TelegramClient(
-  stringSession,
-  apiId,
-  apiHash,
-  {
-    connectionRetries: 5,
+const getClient = async () => {
+  var client_ = null;
+
+  if (isNaN(apiId) || !apiHash) {
+    console.error("❌ ERRO: Verifique se o TELEGRAM_API_ID e TELEGRAM_API_HASH estão corretos no arquivo .env");
+    return null;
   }
-);
+
+  try {
+    client_ = new TelegramClient(new StringSession(stringSession), apiId, apiHash, {
+      connectionRetries: 5,
+    })
+  } catch (err) {
+    await updateConfigInDatabase(telegramConfig.id, {
+      error: err.message,
+      apiTelegramSession: null,
+      step: 'ERROR'
+    })
+
+    console.error("❌ ERRO:", err.message)
+  }
+
+  return client_
+};
+
+const client = await getClient();
+
+const restartServer = async (telegramConfig) => { 
+  console.log("Reiniciando servidor do Telegram...");
+  if (!client) return;
+  
+  // Desconecta
+  await client.disconnect();
+  // Reset dados do banco
+  await updateConfigInDatabase(telegramConfig.id, { apiTelegramSession: null, error: null, step: 'DISCONNECTED' });
+  // Inicializa o Server
+  await startServer(telegramConfig);
+}
 
 const startServer = async () => {
+  if (!client) return;
 
   iniciarKeepAlive(client);
   checkHealthStatus(); 
-  
+  telegramConfig = telegramConfig || await getConfig();
   console.log("Iniciando cliente do Telegram...");
-  
+
+  if (!telegramConfig?.apiTelegramSession) {
+    if (!telegramConfig || !telegramConfig.apiTelegramHash || !telegramConfig.apiTelegramId || !telegramConfig.phoneNumber) {
+      let error = "Verifique se o TELEGRAM_API_ID, TELEGRAM_API_HASH, o número de telefone e a senha estão corretos no banco de dados";
+      if (telegramConfig) updateConfigInDatabase(telegramConfig.id, { error: error });
+      console.log("❌ ERRO: " + error);
+      return
+    }
+  }
+    
   await client.start({
-    phoneNumber: async () => await input.text("Digite seu número de telefone (com +55...): "),
-    password: async () => await input.text("Senha 2FA (se houver): "),
-    phoneCode: async () => await input.text("Código recebido no Telegram: "),
-    onError: (err) => console.log("Erro durante a autenticação:", err),
+    phoneNumber: async () => telegramConfig.phoneNumber,
+    password: async () => {
+      updateConfigInDatabase(telegramConfig.id, { error: "Insira a senha e tente novamente ...", step: 'PASSWORD' });
+    },
+    phoneCode: async () => await waitForPhoneCode(telegramConfig.id),
+    onError: (err) => {
+      updateConfigInDatabase(telegramConfig.id, { error: err.message, apiTelegramSession: null, step: 'ERROR' });
+    },
   });
 
   // Executa a função a cada 5 segundos (5000 milissegundos)
@@ -50,11 +105,8 @@ const startServer = async () => {
 
   console.log("\n🎉 Logado com sucesso!");
   
-  if (!process.env.TELEGRAM_STRING_SESSION) {
-    console.log("Guarde esta string de sessão no seu .env:\n");
-    console.log(client.session.save());
-    console.log("\n--------------------------------------------------\n");
-  }
+  // Session salva no banco de dados para reconectar automaticamente na próxima vez
+  await updateConfigInDatabase(telegramConfig.id, { apiTelegramSession: client.session.save(), step: 'CONNECTED' });
 
   console.log("🎧 Escutando novas mensagens em tempo real...");
 
@@ -84,6 +136,9 @@ const startServer = async () => {
       const conversationServiceInstance = new ConversationService();
 
       conversationServiceInstance.setClient(client)
+
+      const hostTelegramId = await client.getMe();
+
       conversationServiceInstance.telegramReceiveMessage2({
         nome,
         telefone,
@@ -91,7 +146,8 @@ const startServer = async () => {
         chatId: message.chatId,
         text: message.text,
         senderId: message.senderId,
-        date: message.date
+        date: message.date,
+        hostTelegramId: hostTelegramId.id.toString(),
       });
       
     } catch (error) {
@@ -130,7 +186,7 @@ function iniciarKeepAlive(client) {
   clearInterval(iniciarKeepAliveId);
 
     iniciarKeepAliveId = setInterval(async () => {
-        if (client.connected) {
+        if (client && client.connected) {
             try {
                 // Envia uma requisição super leve apenas para dizer "estou aqui"
                 await client.invoke(new Api.help.GetConfig());
@@ -142,4 +198,38 @@ function iniciarKeepAlive(client) {
     }, 1000 * 60 * 3); // Executa a cada 3 minutos
 }
 
-export { startServer };
+async function updateConfigInDatabase(id, data) {
+  await prisma.telegramConfig.update({
+    where: {
+      id: id,
+    },
+    data: data,
+  })
+}
+
+const waitForPhoneCode = async (id) => {
+  const start = Date.now()
+  const timeout = 5 * 60 * 1000 // 5 minutos
+
+  while (true) {
+    await updateConfigInDatabase(id, { error: "Informe o código 2AF...", step: 'CODE' });
+    
+    const config = await prisma.telegramConfig.findFirst({
+      where: { id: id },
+      select: { phoneCode: true },
+    });
+
+    if (config?.phoneCode) {
+      return config.phoneCode
+    }
+
+    if (Date.now() - start > timeout) {
+      updateConfigInDatabase(id, { error: "Timeout: código não recebido em 5 minutos"});
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, 8000)) // 8s
+  }
+}
+
+export { startServer, restartServer };

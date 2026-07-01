@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                           String                @id @default(uuid())
+  email                        String                @unique
+  senha                        String
+  nomeCompleto                 String
+  telegramId                   String?               @unique @map("telegram_id")
+  managedAppointmentRequests   AppointmentRequest[]  @relation("ManagedAppointments")
+  requestedAppointmentRequests AppointmentRequest[]  @relation("RequestedAppointments")
+  contacts                     Contact[]
+  conversations                Conversation[]
+  scheduleSlots                ManagerScheduleSlot[]
+  tasks                        Task[]
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Contact {
+  id            String         @id @default(uuid())
+  name          String?
+  telephone     String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  userId        String?
+  deleted       Int?
+  user          User?          @relation(fields: [userId], references: [id])
+  conversations Conversation[]
+
+  @@index([id, name, telephone])
+}
+
+model Conversation {
+  id                  String               @id @default(uuid())
+  summary             String
+  createdAt           DateTime             @default(now())
+  userId              String
+  status              String               @default("active")
+  channel             String               @default("web")
+  handoverAt          DateTime?
+  handoverNote        String?
+  handlingMode        String               @default("Automatizado")
+  triageScore         Float?
+  triageReason        String?
+  updatedAt           DateTime             @default(now())
+  contactId           String?
+  newMessages         Boolean?
+  telegramChatId      String?
+  appointmentRequests AppointmentRequest[]
+  messages            ChatMessage[]
+  contact             Contact?             @relation(fields: [contactId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([channel, createdAt])
+}
+
+model ManagerScheduleSlot {
+  id                  String               @id @default(uuid())
+  date                DateTime
+  hour                Int
+  isAvailable         Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  managerId           String
+  appointmentRequests AppointmentRequest[]
+  manager             User                 @relation(fields: [managerId], references: [id])
+
+  @@unique([managerId, date, hour])
+  @@index([date, hour])
+}
+
+model AppointmentRequest {
+  id             String               @id @default(uuid())
+  requestedDate  DateTime
+  requestedHour  Int
+  status         String               @default("pending")
+  justification  String?
+  channel        String               @default("web")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  managerId      String
+  requesterId    String
+  conversationId String?
+  managerSlotId  String?
+  conversation   Conversation?        @relation(fields: [conversationId], references: [id])
+  manager        User                 @relation("ManagedAppointments", fields: [managerId], references: [id])
+  managerSlot    ManagerScheduleSlot? @relation(fields: [managerSlotId], references: [id])
+  requester      User                 @relation("RequestedAppointments", fields: [requesterId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([requestedDate, requestedHour])
+  @@index([managerId, status, createdAt])
+}
+
+model ChatMessage {
+  id             String       @id @default(uuid())
+  text           String
+  sender         String
+  createdAt      DateTime     @default(now())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  source    String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level])
+}
+
+model MessageQueue {
+  id        String   @id @default(uuid())
+  chatId    String
+  text      String
+  status    String   @default("PENDING")
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Institution {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  shortName       String?                 @map("short_name")
+  city            String?
+  state           String?
+  country         String?
+  foundedYear     Int?                    @map("founded_year")
+  status          String?
+  description     String?
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  calendarEvents  AcademicCalendarEvent[]
+  courses         Course[]
+  facultyMembers  FacultyMember[]
+  infrastructures Infrastructure[]
+}
+
+model Course {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  institutionId       String?              @map("institution_id") @db.Uuid
+  name                String
+  code                String?
+  degree              String?
+  durationSemesters   Int?                 @map("duration_semesters")
+  workloadHours       Int?                 @map("workload_hours")
+  objective           String?
+  audience            String?
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  institution         Institution?         @relation(fields: [institutionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  curriculumOverviews CurriculumOverview[]
+}
+
+model CurriculumOverview {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId  String?  @map("course_id") @db.Uuid
+  semester  Int?
+  topics    String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  course    Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model AcademicCalendarEvent {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  institutionId String?      @map("institution_id") @db.Uuid
+  title         String
+  eventDate     DateTime?    @map("event_date") @db.Date
+  description   String?
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Infrastructure {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  institutionId String?      @map("institution_id") @db.Uuid
+  name          String
+  description   String?
+  features      Json?        @default("{}")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model FacultyMember {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  institutionId String?      @map("institution_id") @db.Uuid
+  name          String
+  role          String?
+  profile       Json?        @default("{}")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model RagMetadata {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source      String
+  tags        String[]  @default([])
+  version     String?
+  language    String?
+  lastUpdated DateTime? @map("last_updated") @db.Timestamptz(6)
+  raw         Json?     @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+}

@@ -4,8 +4,7 @@ import {
   parseIsoDateOnly,
 } from './../../../lib/schedule.js';
 
-const agendar = async (userId, body) => {
-    const requesterId = userId;
+const agendar = async (contactId, body) => {
 
     try {
         const { managerId, date, hour, channel = 'web', justification = null, conversationId = null } = body;
@@ -25,7 +24,7 @@ const agendar = async (userId, body) => {
         const existing = await prisma.appointmentRequest.findFirst({
             where: {
             managerId,
-            requesterId,
+            requesterId: contactId,
             requestedDate: parsedDate,
             requestedHour: parsedHour,
             },
@@ -59,7 +58,7 @@ const agendar = async (userId, body) => {
         const created = await prisma.appointmentRequest.create({
             data: {
             managerId,
-            requesterId,
+            requesterId: contactId,
             requestedDate: parsedDate,
             requestedHour: parsedHour,
             channel,
