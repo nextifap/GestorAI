@@ -65,20 +65,20 @@ const restartServer = async (telegramConfig) => {
   // Desconecta
   await client.disconnect();
   // Reset dados do banco
-  await updateConfigInDatabase(telegramConfig.id, { apiTelegramSession: null, error: null, phoneCode: null, step: 'DISCONNECTED' });
+  await updateConfigInDatabase(telegramConfig.id, { apiTelegramSession: null, error: null, step: 'DISCONNECTED' });
   // Inicializa o Server
   await startServer(telegramConfig);
 }
 
-const startServer = async (telegramConfig = null) => {
+const startServer = async () => {
   if (!client) return;
 
   iniciarKeepAlive(client);
   checkHealthStatus(); 
-  
+  telegramConfig = telegramConfig || await getConfig();
   console.log("Iniciando cliente do Telegram...");
 
-  if (!telegramConfig?.session) {
+  if (!telegramConfig?.apiTelegramSession) {
     if (!telegramConfig || !telegramConfig.apiTelegramHash || !telegramConfig.apiTelegramId || !telegramConfig.phoneNumber) {
       let error = "Verifique se o TELEGRAM_API_ID, TELEGRAM_API_HASH, o número de telefone e a senha estão corretos no banco de dados";
       if (telegramConfig) updateConfigInDatabase(telegramConfig.id, { error: error });
