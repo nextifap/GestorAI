@@ -11,27 +11,15 @@ import { resolveManagerUserId } from './../../../lib/manager.js';
 import Groq from "groq-sdk";
 import agendar from "./agendarService.js";
 
-let groqInstance = null;
-
-async function getGroqClient() {
-  try {
-    const config = await prisma.groqConfig.findFirst();
-    if (!config || !config.hash) {
-      return null;
-    }
-    
-    if (!groqInstance) {
-      groqInstance = new Groq({
-        apiKey: config.hash,
-      });
-    }
-    
-    return groqInstance;
-  } catch (error) {
-    console.error('Erro ao recuperar configuração do Groq:', error);
-    return null;
-  }
+const groqConfig = async () => {
+  return await prisma.groqConfig.findFirst({
+    orderBy: { id: "desc" },
+  });
 }
+
+const groq = new Groq({
+  apiKey: (await groqConfig())?.hash?.trim(),
+});
 
 function hasAvailabilityIntent(message) {
   const normalized = String(message || '').toLowerCase();
@@ -155,10 +143,11 @@ async function resolveScheduleCommand(managerId, agendamento, conversation) {
   };
 }
 
+
 export default {
   hasScheduleCommand: (message) => {
     return hasAvailabilityIntent(message) || hasAppointmentRequestIntent(message);
   },
   resolveScheduleCommand,
-  getGroqClient,
+  groq
 };  

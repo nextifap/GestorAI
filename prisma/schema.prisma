@@ -45,7 +45,7 @@ model TelegramConfig {
 
 model GroqConfig {
   id                          String         @id @default(uuid())
-  hash                        Boolean?
+  hash                        String?
 }
 
 model TelegramHealthStatus {

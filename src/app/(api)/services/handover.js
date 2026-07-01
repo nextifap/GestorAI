@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import groqService from './groqService';
 
-const { resolveScheduleCommand, getGroqClient, hasScheduleCommand } = groqService;
+const { resolveScheduleCommand, groq, hasScheduleCommand } = groqService;
 
 // Estados permitidos no ciclo de vida da conversa
 const ALLOWED_STATUS = new Set(['active', 'handover_pending', 'handover_in_progress', 'resolved']);
@@ -69,7 +69,6 @@ export async function checkInterventionRequired(text, currentStatus = 'active') 
   const keywordFallback = hasUrgentKeywords(text);
 
   // Se o Groq não estiver configurado ou disponível, usa o fallback de palavras-chave imediatamente
-  const groq = await getGroqClient();
   if (!groq) {
     const finalStatus = keywordFallback ? 'handover_pending' : 'active';
     return {

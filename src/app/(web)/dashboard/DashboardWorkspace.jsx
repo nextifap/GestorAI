@@ -32,10 +32,8 @@ const baseTabOptions = [
   { id: 'handover', label: 'Handover' },
   { id: 'history', label: 'Histórico' },
 ];
-const adminTabOptions = [
-  { id: 'users', label: 'Usuarios' },
-  { id: 'groq-config', label: 'Groq Config' },
-];
+const adminTabOptions = [];
+const hiddenAdminTabs = [];
 const hideSidebarForTabs = ['chat'];
 const CONVERSATIONS_PER_PAGE = 8;
 
@@ -267,6 +265,13 @@ export default function DashboardWorkspace() {
   const visibleTabs = useMemo(() => {
     if (user?.role === 'admin') {
       return [...baseTabOptions, ...adminTabOptions];
+    }
+    return baseTabOptions;
+  }, [user?.role]);
+
+  const availableTabs = useMemo(() => {
+    if (user?.role === 'admin') {
+      return [...baseTabOptions, ...adminTabOptions, ...hiddenAdminTabs];
     }
     return baseTabOptions;
   }, [user?.role]);
@@ -1826,7 +1831,7 @@ export default function DashboardWorkspace() {
                   <button onClick={() => { handleExport(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Exportar tarefas</button>
                   <button onClick={() => { setActiveTab('telegram'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Telegram</button>
                   {user?.role === 'admin' && (
-                    <button onClick={() => { setActiveTab('groq-config'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Groq</button>
+                    <button onClick={() => { setActiveTab('groq-config'); setMenuOpen(false); window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Groq</button>
                   )}
                   <button onClick={() => { document.getElementById('file-input').click(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Importar tarefas</button>
                   <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50">Sair</button>
