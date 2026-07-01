@@ -53,6 +53,24 @@ export async function GET(request) {
           lte: range.toDate,
         },
       },
+      select: {
+        id: true,
+        date: true,
+        hour: true,
+        isAvailable: true,
+        appointmentRequests: {
+          select: {
+            id: true,
+            requesterId: true,
+            requester: {
+              select: {
+                id: true,
+                name: true
+              },
+            }
+          },
+        },
+      },
       orderBy: [{ date: 'asc' }, { hour: 'asc' }],
     });
 
@@ -62,9 +80,16 @@ export async function GET(request) {
         date: toIsoDateOnly(slot.date),
         hour: slot.hour,
         isAvailable: slot.isAvailable,
+        requester: slot.appointmentRequests.length > 0
+          ? {
+              id: slot.appointmentRequests[0].requesterId,
+              nomeCompleto: slot.appointmentRequests[0].requester.name
+            }
+          : null, 
       })),
     }, { status: 200 });
   } catch (error) {
+    console.error('Erro ao buscar slots da agenda:', error);
     await saveSystemLog({
       level: 'ERROR',
       source: 'api/schedule/slots',

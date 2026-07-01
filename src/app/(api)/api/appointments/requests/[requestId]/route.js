@@ -11,6 +11,8 @@ export async function PATCH(request, { params }) {
     return respondAuthError(verificacao);
   }
 
+  params = await params;
+
   const { id: managerId } = verificacao.usuario;
   const requestId = params.requestId;
 
@@ -141,6 +143,7 @@ export async function PATCH(request, { params }) {
           status: true,
           conversation: {
             select: {
+              id: true,
               telegramChatId: true,
             },
           },
@@ -154,6 +157,8 @@ export async function PATCH(request, { params }) {
         text: "Sua solicitação de agendamento foi aprovada pelo gestor.",
       },
     });
+
+    console.log('Agendamento aprovado:', approved);
 
     return NextResponse.json({
       request: {

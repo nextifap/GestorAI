@@ -25,9 +25,22 @@ model User {
   scheduleSlots   ManagerScheduleSlot[]
   contacts        Contact[]
 
-
   managedAppointmentRequests AppointmentRequest[] @relation("ManagedAppointments")
-  requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
+}
+
+model TelegramConfig {
+  id                          String         @id @default(uuid())
+  keysChanged                 Boolean?
+  status                      String?               
+  apiTelegramId               String?
+  apiTelegramHash             String?
+  apiTelegramSession          String?
+  phoneNumber                 String?
+  twoFactor                  String?
+  phoneCode                   String?
+  attempt                     Int?
+  error                       String?
+  step                        String?
 }
 
 model TelegramHealthStatus {
@@ -69,6 +82,9 @@ model Contact {
   conversations Conversation[]
   userId String? // Refere-se a um contato de um outro User
   user User?      @relation(fields: [userId], references: [id])
+
+  requestedAppointmentRequests AppointmentRequest[] @relation("RequestedAppointments")
+  
   deleted Int?
   @@index([id, name, telephone])
 }
@@ -127,7 +143,7 @@ model AppointmentRequest {
   managerId      String
   manager        User     @relation("ManagedAppointments", fields: [managerId], references: [id])
   requesterId    String
-  requester      User     @relation("RequestedAppointments", fields: [requesterId], references: [id])
+  requester      Contact     @relation("RequestedAppointments", fields: [requesterId], references: [id])
   conversationId String?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
   managerSlotId  String?
