@@ -1825,6 +1825,9 @@ export default function DashboardWorkspace() {
                   )}
                   <button onClick={() => { handleExport(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Exportar tarefas</button>
                   <button onClick={() => { setActiveTab('telegram'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Telegram</button>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => { setActiveTab('groq-config'); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Config Groq</button>
+                  )}
                   <button onClick={() => { document.getElementById('file-input').click(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50">Importar tarefas</button>
                   <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full rounded-2xl px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50">Sair</button>
                   <input type="file" id="file-input" className="hidden" onChange={handleImport} accept=".csv" />
