@@ -17,6 +17,7 @@ export default function TelegramLogin() {
   const [phoneCode, setPhoneCode] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [tgError, setTgError] = useState(null);
+  const [status, setStatus] = useState(null);
 
   const pollRef = useRef(null);
 
@@ -54,6 +55,7 @@ export default function TelegramLogin() {
         setTwoFactor(cfg.twoFactor || '');
         setAttempt(Number(cfg.attempt || 0));
         setTgError(cfg.error || null);
+        setStatus(cfg.step || null);
 
         if (cfg.step === 'CONNECTED') {
           setMessage('Telegram conectado com sucesso.');
@@ -75,6 +77,8 @@ export default function TelegramLogin() {
         } else {
           setMessage('Aguardando autenticação...');
         }
+
+        setBusy(false);
       } catch (err) {
         console.error(err);
       }
@@ -168,6 +172,18 @@ export default function TelegramLogin() {
           Autenticação Telegram
         </h2>
       </div>
+      
+      {status === 'CONNECTED' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-green-700">Telegram configurado e ativo</p>
+        </div>
+      )}
+
+      {(status === 'CODE' || status === 'PHONE' || status === 'ERROR' || status === 'PASSWORD') && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-green-700">{message}</p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input className={inputClassName} value={telegramId} onChange={(e) => setTelegramId(e.target.value)} placeholder="telegramId" />
