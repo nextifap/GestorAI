@@ -189,7 +189,7 @@ export default function TelegramLogin() {
           <p className="text-green-700">Telegram configurado e ativo</p>
         </div>
       )}
-      AQUI Ó {status}
+
       {(status === 'CODE' || status === 'PHONE' || status === 'ERROR' || status === 'PASSWORD') && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-green-700">{message}</p>
