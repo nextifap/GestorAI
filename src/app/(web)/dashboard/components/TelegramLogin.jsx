@@ -68,15 +68,7 @@ export default function TelegramLogin() {
           return;
         }
 
-        if (cfg.step === 'PHONE') {
-          setMessage('Aguardando número de telefone...');
-        } else if (cfg.step === 'CODE') {
-          setMessage('Digite o código recebido no Telegram.');
-        } else if (cfg.step === 'PASSWORD') {
-          setMessage('Digite a senha 2FA.');
-        } else {
-          setMessage('Aguardando autenticação...');
-        }
+        setMessageError(cfg);
 
         setBusy(false);
       } catch (err) {
@@ -104,6 +96,9 @@ export default function TelegramLogin() {
             setTwoFactor(cfg.twoFactor || '');
             setAttempt(Number(cfg.attempt || 0));
             setTgError(cfg.error || null);
+            setStatus(cfg.step || null);
+
+            setMessageError(cfg);
           }
         }
       } catch {}
@@ -111,6 +106,22 @@ export default function TelegramLogin() {
 
     return () => stopPolling();
   }, []);
+
+  const setMessageError = (cfg) => {
+    if (cfg.step === 'ERROR') {
+      setMessage(cfg.error || 'Erro na autenticação.');
+    } else if (cfg.step === 'CONNECTED') {
+      setMessage('Telegram conectado com sucesso.');
+    } else if (cfg.step === 'PHONE') {
+      setMessage('Aguardando número de telefone...');
+    } else if (cfg.step === 'CODE') {
+      setMessage('Digite o código recebido no Telegram.');
+    } else if (cfg.step === 'PASSWORD') {
+      setMessage('Digite a senha 2FA.');
+    } else {
+      setMessage('Aguardando autenticação...');
+    }
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -178,7 +189,7 @@ export default function TelegramLogin() {
           <p className="text-green-700">Telegram configurado e ativo</p>
         </div>
       )}
-
+      AQUI Ó {status}
       {(status === 'CODE' || status === 'PHONE' || status === 'ERROR' || status === 'PASSWORD') && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-green-700">{message}</p>

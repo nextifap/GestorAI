@@ -87,16 +87,14 @@ export async function PATCH(request) {
   if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'nodejs') {
     try {
       const telegram = await import('../../../../../telegramServer.js');
-      console.error("... 1");
       if (typeof telegram.restartServer === 'function') {
-        console.error("... 2");
         await telegram.restartServer(config);
       }
     } catch (error) {
       console.error('Erro ao reiniciar Telegram server após salvar config:', error?.message || error);
     }
   } else {
-    console.error("... 0");
+    console.warn('Não é possível reiniciar o Telegram server: ambiente não é Node.js');
   }
 
   const savedConfig = await prisma.telegramConfig.findUnique({
