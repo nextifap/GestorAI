@@ -107,6 +107,7 @@ const startServer = async () => {
   
   // Session salva no banco de dados para reconectar automaticamente na próxima vez
   await updateConfigInDatabase(telegramConfig.id, { apiTelegramSession: client.session.save(), step: 'CONNECTED' });
+  await updateAdminContact(telegramConfig.id, (await client.getMe()).id.toString());
 
   console.log("🎧 Escutando novas mensagens em tempo real...");
 
@@ -205,6 +206,17 @@ async function updateConfigInDatabase(id, data) {
     },
     data: data,
   })
+}
+
+async function updateAdminContact(id, telegramId) {
+  const userManager = await prisma.user.update({
+      where: {
+          email: process.env.EMAIL_ADMIN
+      },
+      data: {
+          telegramId: telegramId
+      }
+  });
 }
 
 const waitForPhoneCode = async (id) => {
