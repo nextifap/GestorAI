@@ -87,7 +87,7 @@ export async function PATCH(request) {
   if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'nodejs') {
     try {
       const telegram = await import('../../../../../telegramServer.js');
-      if (typeof telegram.restartServer === 'function') {
+      if (typeof telegram.restartServer === 'function' && !twoFactor && !phoneCode) {
         await telegram.restartServer(config);
       }
     } catch (error) {
