@@ -77,7 +77,7 @@ export default function TelegramLogin() {
     };
 
     runCheck();
-    pollRef.current = setInterval(runCheck, 5000);
+    pollRef.current = setInterval(runCheck, 1000);
   };
 
   useEffect(() => {
